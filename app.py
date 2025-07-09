@@ -432,101 +432,29 @@ HTML_TEMPLATE = """
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        var socket = io();
-        var runningProcesses = [];
+        // Simple refresh every 3 seconds for now
+        setInterval(function() {
+            window.location.reload();
+        }, 3000);
         
-        socket.on('connect', function() {
-            console.log('Connected to WebSocket');
-        });
-        
-        socket.on('process_status', function(data) {
-            runningProcesses = data.running_processes;
-            updateProcessDisplay();
-        });
-        
-        socket.on('process_output', function(data) {
-            var outputArea = document.getElementById('output-' + data.script_id);
-            if (!outputArea) {
-                createOutputArea(data.script_id);
-                outputArea = document.getElementById('output-' + data.script_id);
-            }
-            
-            var pre = outputArea.querySelector('pre');
-            if (pre) {
-                pre.textContent += data.line + '\n';
-                pre.scrollTop = pre.scrollHeight;
-            }
-            
-            if (data.status === 'running') {
-                if (runningProcesses.indexOf(data.script_id) === -1) {
-                    runningProcesses.push(data.script_id);
-                }
-            } else {
-                var index = runningProcesses.indexOf(data.script_id);
-                if (index > -1) {
-                    runningProcesses.splice(index, 1);
-                }
-            }
-            
-            updateProcessDisplay();
-        });
-        
-        function createOutputArea(script_id) {
-            var container = document.getElementById('recent-activity');
-            if (!container) return;
-            
-            var outputDiv = document.createElement('div');
-            var timestamp = new Date().toLocaleString();
-            outputDiv.innerHTML = '<div><h3>' + script_id + ' - ' + timestamp + '</h3>' +
-                '<div id="output-' + script_id + '">' +
-                '<pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;"></pre>' +
-                '</div></div>';
-            
-            container.appendChild(outputDiv);
-        }
-        
-        function updateProcessDisplay() {
-            var processSection = document.querySelector('.running-processes');
-            if (!processSection) return;
-            
-            if (runningProcesses.length > 0) {
-                var html = '<h2>Running Processes</h2>';
-                for (var i = 0; i < runningProcesses.length; i++) {
-                    html += '<div style="margin: 10px 0;">' +
-                           '<span>' + runningProcesses[i] + ' is running...</span>' +
-                           '<button onclick="stopProcess(&quot;' + runningProcesses[i] + '&quot;)" style="margin-left: 10px;">Stop</button>' +
-                           '</div>';
-                }
-                processSection.innerHTML = html;
-            } else {
-                processSection.innerHTML = '<h2>Running Processes</h2><p>No processes currently running</p>';
-            }
-        }
-        
+        // Simple stop function
         function stopProcess(scriptId) {
             if (confirm('Stop process: ' + scriptId + '?')) {
-                fetch('/stop_process/' + scriptId, {
-                    method: 'POST'
-                })
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data.success) {
-                        alert('Process stopped');
-                    } else {
-                        alert('Failed to stop: ' + data.message);
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/stop_process/' + scriptId, true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            alert('Process stopped');
+                            window.location.reload();
+                        } else {
+                            alert('Failed to stop process');
+                        }
                     }
-                })
-                .catch(function(error) {
-                    alert('Error: ' + error);
-                });
+                };
+                xhr.send();
             }
         }
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            updateProcessDisplay();
-        });
     </script>
 </head>
 <body>
@@ -623,17 +551,18 @@ HTML_TEMPLATE = """
         <h2>🔄 Running Processes</h2>
         {% if running_processes %}
             {% for script_id in running_processes %}
-                <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+                <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">
                     <span class="running-indicator">⏳ {{ script_id }} is running...</span>
                     <button onclick="stopProcess('{{ script_id }}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                        Stop
+                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; margin-left: 10px; cursor: pointer;">
+                        Stop Process
                     </button>
                 </div>
             {% endfor %}
         {% else %}
             <p>No scripts currently running</p>
         {% endif %}
+        <p><small>Page refreshes every 3 seconds to show updates</small></p>
     </div>
     
     <div id="recent-activity">
