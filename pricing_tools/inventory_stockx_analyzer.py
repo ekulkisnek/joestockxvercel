@@ -49,7 +49,12 @@ class InventoryStockXAnalyzer:
         self.processed_count = 0
         self.matches_found = 0
         self.cache = {}
-        self.client.token_file = '../tokens_full_scope.json'
+        
+        # Set correct token file path - check if we're in pricing_tools directory
+        if os.path.basename(os.getcwd()) == 'pricing_tools':
+            self.client.token_file = '../tokens_full_scope.json'
+        else:
+            self.client.token_file = 'tokens_full_scope.json'
 
     def parse_csv_flexible(self, csv_file: str) -> List[InventoryItem]:
         """Parse CSV file flexibly - handles multiple formats"""
