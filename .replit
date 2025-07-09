@@ -1,7 +1,7 @@
 modules = ["python-3.11"]
 
 [workflows]
-runButton = "Web Interface"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Run"
@@ -11,24 +11,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 main.py"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "StockX API Server"
-
-[[workflows.workflow]]
-name = "StockX API Server"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python oauth_callback.py"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Run Examples"
@@ -65,6 +47,24 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 app.py"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Flask Web Interface"
+
+[[workflows.workflow]]
+name = "Flask Web Interface"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python app.py"
+waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "python3 oauth_callback.py"]

@@ -242,4 +242,4 @@ if __name__ == '__main__':
     print("🔄 Page auto-refreshes every 5 seconds")
     print("=" * 50)
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
