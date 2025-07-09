@@ -31,6 +31,8 @@ function initWebSocket() {
 
 function addOutputLine(scriptId, line) {
     console.log('Adding line for:', scriptId, line);
+    
+    // Try to find existing container first
     var outputContainer = document.getElementById('output-' + scriptId);
     console.log('Output container found:', outputContainer);
     
@@ -42,19 +44,28 @@ function addOutputLine(scriptId, line) {
     
     if (!outputContainer) {
         console.error('Failed to create/find output container for:', scriptId);
-        return;
+        // Create emergency container in recent-activity if it exists
+        var recentActivity = document.getElementById('recent-activity');
+        if (recentActivity) {
+            var emergencyDiv = document.createElement('div');
+            emergencyDiv.id = 'output-' + scriptId;
+            emergencyDiv.innerHTML = '<h3>' + scriptId + ' (WebSocket Stream)</h3><pre style="background: #f5f5f5; padding: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd;"></pre>';
+            recentActivity.appendChild(emergencyDiv);
+            outputContainer = emergencyDiv;
+        } else {
+            return;
+        }
     }
     
     var pre = outputContainer.querySelector('pre');
     if (pre) {
-        // For existing containers, append to textContent properly
-        var currentContent = pre.textContent || '';
-        pre.textContent = currentContent + line + '\n';
+        // Create a text node and append it to preserve formatting
+        var textNode = document.createTextNode(line + '\n');
+        pre.appendChild(textNode);
         pre.scrollTop = pre.scrollHeight;
-        console.log('Added line to existing pre via textContent');
+        console.log('Added line to existing pre via appendChild');
     } else {
-        console.log('Creating new pre element');
-        // Fallback: create the pre element if it doesn't exist
+        console.log('Creating new pre element in container');
         var newPre = document.createElement('pre');
         newPre.style.background = '#f5f5f5';
         newPre.style.padding = '10px';

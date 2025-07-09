@@ -1070,6 +1070,44 @@ def process_list():
         'process_count': len(running_processes)
     })
 
+@app.route('/debug')
+def debug_websocket():
+    """Debug WebSocket page"""
+    try:
+        with open('debug_websocket.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Debug file not found", 404
+
+@app.route('/test_websocket')
+def test_websocket():
+    """Test WebSocket by sending a few messages"""
+    try:
+        import time
+        import threading
+        
+        def send_test_messages():
+            time.sleep(1)
+            for i in range(3):
+                socketio.emit('process_output', {
+                    'script_id': 'websocket_test',
+                    'line': f'🧪 Test message {i+1}/3 - {time.strftime("%H:%M:%S")}',
+                    'status': 'running'
+                })
+                time.sleep(1)
+            socketio.emit('process_output', {
+                'script_id': 'websocket_test', 
+                'line': '✅ WebSocket test completed!',
+                'status': 'completed'
+            })
+        
+        # Start in background thread
+        threading.Thread(target=send_test_messages, daemon=True).start()
+        
+        return jsonify({'success': True, 'message': 'WebSocket test started'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
 # WebSocket handlers
 @socketio.on('connect')
 def handle_connect():

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Debug Test</title>
+</head>
+<body>
+    <h1>WebSocket Debug Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        
+        socket.on('connect', function() {
+            statusDiv.textContent = 'Connected to WebSocket';
+            console.log('WebSocket connected');
+        });
+        
+        socket.on('disconnect', function() {
+            statusDiv.textContent = 'Disconnected from WebSocket';
+            console.log('WebSocket disconnected');
+        });
+        
+        socket.on('process_output', function(data) {
+            console.log('Received process_output:', data);
+            const msgDiv = document.createElement('div');
+            msgDiv.textContent = `[${data.script_id}] ${data.line}`;
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+        
+        socket.on('process_status', function(data) {
+            console.log('Received process_status:', data);
+            const msgDiv = document.createElement('div');
+            msgDiv.textContent = `STATUS: ${JSON.stringify(data)}`;
+            msgDiv.style.color = 'blue';
+            messagesDiv.appendChild(msgDiv);
+        });
+    </script>
+</body>
+</html>
