@@ -34,6 +34,18 @@ function addOutputLine(scriptId, line) {
     if (pre) {
         pre.textContent = pre.textContent + line + '\n';
         pre.scrollTop = pre.scrollHeight;
+    } else {
+        // Fallback: create the pre element if it doesn't exist
+        var newPre = document.createElement('pre');
+        newPre.style.background = '#f5f5f5';
+        newPre.style.padding = '10px';
+        newPre.style.maxHeight = '300px';
+        newPre.style.overflowY = 'auto';
+        newPre.style.border = '1px solid #ddd';
+        newPre.style.borderRadius = '4px';
+        newPre.style.whiteSpace = 'pre-wrap';
+        newPre.textContent = line + '\n';
+        outputContainer.appendChild(newPre);
     }
 }
 
@@ -51,17 +63,17 @@ function updateRunningProcesses(processes) {
     var section = document.querySelector('.running-processes');
     if (!section) return;
     
-    var html = '<h2>Running Processes</h2>';
+    var html = '<h2>🔄 Running Processes</h2>';
     if (processes.length > 0) {
         for (var i = 0; i < processes.length; i++) {
             html += '<div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">';
-            html += '<span>' + processes[i] + ' is running...</span>';
-            html += '<button onclick="stopProcess(\'' + processes[i] + '\')" style="margin-left: 10px; background: #dc3545; color: white; border: none; padding: 4px 8px; cursor: pointer;">Stop</button>';
+            html += '<span class="running-indicator">⏳ ' + processes[i] + ' is running...</span>';
+            html += '<button onclick="stopProcess(\'' + processes[i] + '\')" style="margin-left: 10px; background: #dc3545; color: white; border: none; padding: 4px 8px; cursor: pointer;">Stop Process</button>';
             html += '</div>';
         }
         html += '<p><small>Real-time streaming updates via WebSocket</small></p>';
     } else {
-        html += '<p>No processes currently running</p>';
+        html += '<p>No scripts currently running</p>';
         html += '<p><small>Real-time streaming updates via WebSocket</small></p>';
     }
     section.innerHTML = html;
@@ -69,6 +81,11 @@ function updateRunningProcesses(processes) {
 
 function stopProcess(scriptId) {
     if (confirm('Stop process: ' + scriptId + '?')) {
+        // Disable the button to prevent multiple clicks
+        var button = event.target;
+        button.disabled = true;
+        button.textContent = 'Stopping...';
+        
         fetch('/stop_process/' + scriptId, {
             method: 'POST',
             headers: {
@@ -80,13 +97,20 @@ function stopProcess(scriptId) {
         })
         .then(function(data) {
             if (data.success) {
-                alert('Process stopped successfully');
+                // Process stopped successfully, the WebSocket will update the UI
+                console.log('Process stopped successfully');
             } else {
                 alert('Failed to stop process: ' + data.message);
+                // Re-enable button on failure
+                button.disabled = false;
+                button.textContent = 'Stop Process';
             }
         })
         .catch(function(error) {
             alert('Error stopping process: ' + error);
+            // Re-enable button on error
+            button.disabled = false;
+            button.textContent = 'Stop Process';
         });
     }
 }

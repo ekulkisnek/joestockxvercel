@@ -353,6 +353,12 @@ def run_script_async(script_id, command, working_dir=None):
         running_processes[script_id] = process
         process_pids[script_id] = process.pid
         
+        # Update running processes status via WebSocket
+        socketio.emit('process_status', {
+            'running_processes': list(running_processes.keys()),
+            'process_count': len(running_processes)
+        })
+        
         # Read output line by line and stream via WebSocket
         for line in iter(process.stdout.readline, ''):
             if line:
@@ -397,6 +403,12 @@ def run_script_async(script_id, command, working_dir=None):
             del running_processes[script_id]
         if script_id in process_pids:
             del process_pids[script_id]
+        
+        # Update running processes status via WebSocket
+        socketio.emit('process_status', {
+            'running_processes': list(running_processes.keys()),
+            'process_count': len(running_processes)
+        })
         
         # Restore original directory
         os.chdir(original_dir)
@@ -1032,6 +1044,12 @@ def stop_process(script_id):
                 'script_id': script_id,
                 'line': "🛑 Process stopped by user",
                 'status': 'stopped'
+            })
+            
+            # Update running processes status
+            socketio.emit('process_status', {
+                'running_processes': list(running_processes.keys()),
+                'process_count': len(running_processes)
             })
             
             return jsonify({'success': True, 'message': 'Process stopped'})
