@@ -1,0 +1,639 @@
+Absolutely! Yes, deploying to Replit would make this much easier because you can use your Replit app's URL as the redirect URI and automatically catch the OAuth callback. Let me show you how to modify the code to make it fully automated.
+
+Read file: auto_auth_system.py
+Perfect! I can see that the `AuthCallbackHandler` class is already implemented but not being used. Here's how to modify your code to make it fully automated on Replit:
+
+## 🔄 **Automated OAuth for Replit**
+
+### **1. Create a New Automated Auth Class**
+
+```python
+#!/usr/bin/env python3
+"""
+🔐 Fully Automated StockX Authentication for Replit
+No manual intervention required!
+"""
+import json
+import requests
+import secrets
+import time
+import threading
+import webbrowser
+import os
+from urllib.parse import urlencode, parse_qs
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import datetime, timedelta
+
+class AuthCallbackHandler(BaseHTTPRequestHandler):
+    """Handle OAuth callback automatically"""
+    
+    def do_GET(self):
+        # Parse the callback URL
+        if '?' in self.path:
+            query_string = self.path.split('?', 1)[1]
+            params = parse_qs(query_string)
+            
+            # Store the authorization code
+            if 'code' in params:
+                self.server.auth_code = params['code'][0]
+                self.server.auth_success = True
+                
+                # Send success page
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                success_html = """
+                <html>
+                <head><title>StockX Auth Success</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: green;">✅ Authentication Successful!</h1>
+                    <p>You can close this browser window now.</p>
+                    <p>The StockX API client is now authenticated.</p>
+                </body>
+                </html>
+                """
+                self.wfile.write(success_html.encode())
+            
+            elif 'error' in params:
+                self.server.auth_error = params['error'][0]
+                self.server.auth_success = False
+                
+                # Send error page
+                self.send_response(400)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                error_html = f"""
+                <html>
+                <head><title>StockX Auth Error</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: red;">❌ Authentication Error</h1>
+                    <p>Error: {params['error'][0]}</p>
+                    <p>Please try again.</p>
+                </body>
+                </html>
+                """
+                self.wfile.write(error_html.encode())
+    
+    def log_message(self, format, *args):
+        # Suppress log messages
+        pass
+
+class StockXReplitAuth:
+    def __init__(self):
+        self.api_key = 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp'
+        self.client_id = 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL'
+        self.client_secret = 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn'
+        self.token_file = 'tokens_full_scope.json'
+        
+        # Get Replit URL dynamically
+        self.redirect_uri = self._get_replit_url()
+    
+    def _get_replit_url(self):
+        """Get the Replit app URL"""
+        # In Replit, the URL is typically available as an environment variable
+        replit_url = os.getenv('REPLIT_URL')
+        if replit_url:
+            return f"{replit_url}/auth/callback"
+        
+        # Fallback for local development
+        return "http://localhost:8000/auth/callback"
+    
+    def _start_callback_server(self):
+        """Start a local server to catch the OAuth callback"""
+        server = HTTPServer(('localhost', 8000), AuthCallbackHandler)
+        server.auth_code = None
+        server.auth_success = False
+        server.auth_error = None
+        
+        # Start server in a separate thread
+        server_thread = threading.Thread(target=server.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+        
+        return server
+    
+    def is_token_valid(self):
+        """Check if current access token is still valid"""
+        try:
+            with open(self.token_file, 'r') as f:
+                tokens = json.load(f)
+            
+            # Simple test API call
+            headers = {
+                'Authorization': f'Bearer {tokens["access_token"]}',
+                'x-api-key': self.api_key
+            }
+            
+            response = requests.get(
+                'https://api.stockx.com/v2/catalog/search?query=test&pageSize=1',
+                headers=headers,
+                timeout=10
+            )
+            
+            return response.status_code == 200
+            
+        except Exception:
+            return False
+    
+    def can_refresh_token(self):
+        """Check if we have a valid refresh token"""
+        try:
+            with open(self.token_file, 'r') as f:
+                tokens = json.load(f)
+            return 'refresh_token' in tokens
+        except Exception:
+            return False
+    
+    def refresh_access_token(self):
+        """Refresh the access token using refresh token"""
+        try:
+            with open(self.token_file, 'r') as f:
+                tokens = json.load(f)
+            
+            data = {
+                'grant_type': 'refresh_token',
+                'refresh_token': tokens['refresh_token'],
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,
+                'audience': 'gateway.stockx.com'
+            }
+            
+            response = requests.post(
+                'https://accounts.stockx.com/oauth/token',
+                data=data,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+            )
+            
+            if response.status_code == 200:
+                new_tokens = response.json()
+                
+                # Preserve refresh token if not provided in response
+                if 'refresh_token' not in new_tokens and 'refresh_token' in tokens:
+                    new_tokens['refresh_token'] = tokens['refresh_token']
+                
+                with open(self.token_file, 'w') as f:
+                    json.dump(new_tokens, f, indent=2)
+                
+                print("✅ Access token refreshed successfully!")
+                return True
+            else:
+                print(f"❌ Token refresh failed: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error refreshing token: {str(e)}")
+            return False
+    
+    def automated_authentication(self):
+        """Perform fully automated OAuth authentication"""
+        print("�� Starting Automated OAuth Authentication...")
+        print(f"�� Using redirect URI: {self.redirect_uri}")
+        
+        # Start callback server
+        server = self._start_callback_server()
+        print("✅ Callback server started on localhost:8000")
+        
+        # Generate auth URL
+        state = secrets.token_urlsafe(32)
+        scope = 'openid offline_access read:catalog read:products read:market'
+        
+        auth_params = {
+            'client_id': self.client_id,
+            'response_type': 'code',
+            'redirect_uri': self.redirect_uri,
+            'state': state,
+            'scope': scope,
+            'audience': 'gateway.stockx.com'
+        }
+        
+        auth_url = f"https://accounts.stockx.com/authorize?{urlencode(auth_params)}"
+        
+        print(f"🌐 Opening browser for authentication...")
+        print(f"�� If browser doesn't open, visit: {auth_url}")
+        
+        # Open browser automatically
+        webbrowser.open(auth_url)
+        
+        print("⏳ Waiting for OAuth callback...")
+        
+        # Wait for callback (max 5 minutes)
+        timeout = 300  # 5 minutes
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            if server.auth_success:
+                print("✅ Authorization code received automatically!")
+                return self._exchange_code_for_tokens(server.auth_code)
+            elif server.auth_error:
+                print(f"❌ Authentication error: {server.auth_error}")
+                return False
+            
+            time.sleep(1)
+        
+        print("❌ Authentication timeout - no callback received")
+        return False
+    
+    def _exchange_code_for_tokens(self, auth_code):
+        """Exchange authorization code for access tokens"""
+        print("🔄 Exchanging code for tokens...")
+        
+        data = {
+            'grant_type': 'authorization_code',
+            'code': auth_code,
+            'redirect_uri': self.redirect_uri,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'audience': 'gateway.stockx.com'
+        }
+        
+        response = requests.post(
+            'https://accounts.stockx.com/oauth/token',
+            data=data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        
+        if response.status_code == 200:
+            tokens = response.json()
+            
+            with open(self.token_file, 'w') as f:
+                json.dump(tokens, f, indent=2)
+            
+            print("✅ Full authentication successful!")
+            print(f"💾 Tokens saved to {self.token_file}")
+            return True
+        else:
+            print(f"❌ Token exchange failed: {response.status_code} - {response.text}")
+            return False
+    
+    def authenticate(self):
+        """Smart authentication - try refresh first, fall back to automated auth"""
+        print("�� StockX Replit Auto-Authentication System")
+        print("=" * 50)
+        
+        # Check if current token is valid
+        if self.is_token_valid():
+            print("✅ Current access token is valid!")
+            return True
+        
+        print("⚠️  Access token expired or invalid")
+        
+        # Try to refresh token
+        if self.can_refresh_token():
+            print("🔄 Attempting to refresh access token...")
+            if self.refresh_access_token():
+                return True
+            else:
+                print("⚠️  Token refresh failed, need full re-authentication")
+        else:
+            print("⚠️  No refresh token available, need full authentication")
+        
+        # Full authentication required
+        print("�� Starting automated authentication process...")
+        return self.automated_authentication()
+
+def main():
+    """Main authentication function"""
+    auth = StockXReplitAuth()
+    
+    if auth.authenticate():
+        print("\n🎉 AUTHENTICATION SUCCESSFUL!")
+        print("=" * 50)
+        print("✅ StockX API is now ready to use")
+        print("✅ Access token is valid")
+        print("✅ No manual intervention required")
+        print("\n🚀 You can now run your StockX API scripts!")
+        
+        # Quick test
+        print("\n�� Testing API access...")
+        try:
+            with open('tokens_full_scope.json', 'r') as f:
+                tokens = json.load(f)
+            
+            headers = {
+                'Authorization': f'Bearer {tokens["access_token"]}',
+                'x-api-key': auth.api_key
+            }
+            
+            response = requests.get(
+                'https://api.stockx.com/v2/catalog/search?query=nike&pageSize=1',
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                count = data.get('count', 0)
+                print(f"✅ API Test Success! Found {count:,} Nike products")
+            else:
+                print(f"⚠️  API Test Warning: {response.status_code}")
+                
+        except Exception as e:
+            print(f"⚠️  API Test Error: {str(e)}")
+    
+    else:
+        print("\n❌ AUTHENTICATION FAILED")
+        print("Please check your internet connection and try again.")
+
+if __name__ == "__main__":
+    main()
+```
+
+### **2. For Replit Deployment, Create a Web App**
+
+Create a `main.py` file for Replit:
+
+```python
+#!/usr/bin/env python3
+"""
+�� StockX API Web App for Replit
+"""
+from flask import Flask, request, render_template_string
+import json
+import requests
+import secrets
+import time
+import threading
+import webbrowser
+import os
+from urllib.parse import urlencode, parse_qs
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+app = Flask(__name__)
+
+# Global variables to store auth state
+auth_code = None
+auth_success = False
+auth_error = None
+
+class AuthCallbackHandler(BaseHTTPRequestHandler):
+    """Handle OAuth callback automatically"""
+    
+    def do_GET(self):
+        global auth_code, auth_success, auth_error
+        
+        # Parse the callback URL
+        if '?' in self.path:
+            query_string = self.path.split('?', 1)[1]
+            params = parse_qs(query_string)
+            
+            # Store the authorization code
+            if 'code' in params:
+                auth_code = params['code'][0]
+                auth_success = True
+                auth_error = None
+                
+                # Send success page
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                success_html = """
+                <html>
+                <head><title>StockX Auth Success</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: green;">✅ Authentication Successful!</h1>
+                    <p>You can close this browser window now.</p>
+                    <p>The StockX API client is now authenticated.</p>
+                </body>
+                </html>
+                """
+                self.wfile.write(success_html.encode())
+            
+            elif 'error' in params:
+                auth_error = params['error'][0]
+                auth_success = False
+                
+                # Send error page
+                self.send_response(400)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                error_html = f"""
+                <html>
+                <head><title>StockX Auth Error</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: red;">❌ Authentication Error</h1>
+                    <p>Error: {params['error'][0]}</p>
+                    <p>Please try again.</p>
+                </body>
+                </html>
+                """
+                self.wfile.write(error_html.encode())
+    
+    def log_message(self, format, *args):
+        # Suppress log messages
+        pass
+
+@app.route('/')
+def home():
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>StockX API Authentication</title>
+        <style>
+            body { font-family: Arial; text-align: center; padding: 50px; }
+            .button { background: #007bff; color: white; padding: 10px 20px; 
+                     text-decoration: none; border-radius: 5px; display: inline-block; }
+        </style>
+    </head>
+    <body>
+        <h1>🔐 StockX API Authentication</h1>
+        <p>Click the button below to authenticate with StockX:</p>
+        <a href="/auth" class="button">Authenticate with StockX</a>
+    </body>
+    </html>
+    """)
+
+@app.route('/auth')
+def start_auth():
+    """Start the OAuth authentication process"""
+    global auth_code, auth_success, auth_error
+    
+    # Reset auth state
+    auth_code = None
+    auth_success = False
+    auth_error = None
+    
+    # Get Replit URL
+    replit_url = os.getenv('REPLIT_URL', 'http://localhost:5000')
+    redirect_uri = f"{replit_url}/callback"
+    
+    # Generate auth URL
+    state = secrets.token_urlsafe(32)
+    scope = 'openid offline_access read:catalog read:products read:market'
+    
+    auth_params = {
+        'client_id': 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL',
+        'response_type': 'code',
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'scope': scope,
+        'audience': 'gateway.stockx.com'
+    }
+    
+    auth_url = f"https://accounts.stockx.com/authorize?{urlencode(auth_params)}"
+    
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>StockX Authentication</title>
+        <style>
+            body { font-family: Arial; text-align: center; padding: 50px; }
+            .button { background: #28a745; color: white; padding: 10px 20px; 
+                     text-decoration: none; border-radius: 5px; display: inline-block; }
+        </style>
+    </head>
+    <body>
+        <h1>🌐 StockX Authentication</h1>
+        <p>Click the button below to authenticate:</p>
+        <a href="{{ auth_url }}" class="button">Login to StockX</a>
+        <br><br>
+        <p><small>This will redirect you to StockX for authentication.</small></p>
+    </body>
+    </html>
+    """, auth_url=auth_url)
+
+@app.route('/callback')
+def auth_callback():
+    """Handle OAuth callback"""
+    global auth_code, auth_success, auth_error
+    
+    # Get the authorization code from URL parameters
+    code = request.args.get('code')
+    error = request.args.get('error')
+    
+    if code:
+        auth_code = code
+        auth_success = True
+        auth_error = None
+        
+        # Exchange code for tokens
+        success = exchange_code_for_tokens(code)
+        
+        if success:
+            return render_template_string("""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Success</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: green;">✅ Authentication Successful!</h1>
+                <p>Your StockX API is now authenticated.</p>
+                <p>You can close this window and return to your app.</p>
+            </body>
+            </html>
+            """)
+        else:
+            return render_template_string("""
+            <!DOCTYPE html>
+            <html>
+            <head><title>Error</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: red;">❌ Authentication Failed</h1>
+                <p>There was an error exchanging the authorization code.</p>
+                <p>Please try again.</p>
+            </body>
+            </html>
+            """)
+    
+    elif error:
+        auth_error = error
+        auth_success = False
+        
+        return render_template_string("""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1 style="color: red;">❌ Authentication Error</h1>
+            <p>Error: {{ error }}</p>
+            <p>Please try again.</p>
+        </body>
+        </html>
+        """, error=error)
+    
+    return "Invalid callback"
+
+def exchange_code_for_tokens(auth_code):
+    """Exchange authorization code for tokens"""
+    replit_url = os.getenv('REPLIT_URL', 'http://localhost:5000')
+    redirect_uri = f"{replit_url}/callback"
+    
+    data = {
+        'grant_type': 'authorization_code',
+        'code': auth_code,
+        'redirect_uri': redirect_uri,
+        'client_id': 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL',
+        'client_secret': 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn',
+        'audience': 'gateway.stockx.com'
+    }
+    
+    response = requests.post(
+        'https://accounts.stockx.com/oauth/token',
+        data=data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}
+    )
+    
+    if response.status_code == 200:
+        tokens = response.json()
+        with open('tokens_full_scope.json', 'w') as f:
+            json.dump(tokens, f, indent=2)
+        print("✅ Tokens saved successfully!")
+        return True
+    else:
+        print(f"❌ Token exchange failed: {response.status_code}")
+        return False
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+```
+
+### **3. Replit Configuration**
+
+Create a `.replit` file:
+
+```toml
+run = "python main.py"
+entrypoint = "main.py"
+
+[nix]
+channel = "stable-22_11"
+
+[env]
+PYTHONPATH = "${PYTHONPATH}:${REPL_HOME}"
+
+[packager]
+language = "python3"
+
+[packager.features]
+packageSearch = true
+guessImports = true
+
+[languages.python]
+pattern = "**/*.py"
+syntax = "python"
+
+[languages.python.languageServer]
+start = [ "pylsp" ]
+```
+
+### **4. How It Works on Replit**
+
+1. **Your Replit app gets a public URL** like `https://your-app.your-username.repl.co`
+2. **The redirect URI becomes** `https://your-app.your-username.repl.co/callback`
+3. **StockX redirects to your app** after authentication
+4. **Your Flask app catches the callback** and extracts the code automatically
+5. **No manual copying needed!**
+
+### **5. Benefits of This Approach**
+
+✅ **Fully automated** - no manual code copying  
+✅ **Works on any platform** with a public URL  
+✅ **Secure** - tokens stored locally  
+✅ **User-friendly** - web interface for authentication  
+✅ **Reusable** - tokens persist between sessions  
+
+The key difference is that instead of redirecting to `example.com` (which you don't control), it redirects to your own Replit app URL, allowing you to automatically catch and process the OAuth callback!

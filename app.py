@@ -10,6 +10,11 @@ import subprocess
 import threading
 import os
 import sys
+import json
+import requests
+import secrets
+import webbrowser
+from urllib.parse import urlencode, parse_qs
 from datetime import datetime
 
 app = Flask(__name__)
@@ -17,6 +22,141 @@ app = Flask(__name__)
 # Store running processes and their outputs
 running_processes = {}
 process_outputs = {}
+
+# StockX OAuth configuration
+STOCKX_API_KEY = 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp'
+STOCKX_CLIENT_ID = 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL'
+STOCKX_CLIENT_SECRET = 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn'
+TOKEN_FILE = 'tokens_full_scope.json'
+
+# Global auth state
+auth_state = {
+    'authenticated': False,
+    'auth_in_progress': False,
+    'auth_code': None,
+    'auth_error': None
+}
+
+def get_replit_url():
+    """Get the Replit app URL for OAuth callback"""
+    replit_url = os.getenv('REPLIT_URL')
+    if replit_url:
+        return replit_url.rstrip('/')
+    return 'http://localhost:5000'
+
+def is_token_valid():
+    """Check if current access token is still valid"""
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        
+        headers = {
+            'Authorization': f'Bearer {tokens["access_token"]}',
+            'x-api-key': STOCKX_API_KEY
+        }
+        
+        response = requests.get(
+            'https://api.stockx.com/v2/catalog/search?query=test&pageSize=1',
+            headers=headers,
+            timeout=10
+        )
+        
+        return response.status_code == 200
+    except Exception:
+        return False
+
+def can_refresh_token():
+    """Check if we have a valid refresh token"""
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        return 'refresh_token' in tokens
+    except Exception:
+        return False
+
+def refresh_access_token():
+    """Refresh the access token using refresh token"""
+    try:
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        
+        data = {
+            'grant_type': 'refresh_token',
+            'refresh_token': tokens['refresh_token'],
+            'client_id': STOCKX_CLIENT_ID,
+            'client_secret': STOCKX_CLIENT_SECRET,
+            'audience': 'gateway.stockx.com'
+        }
+        
+        response = requests.post(
+            'https://accounts.stockx.com/oauth/token',
+            data=data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        
+        if response.status_code == 200:
+            new_tokens = response.json()
+            
+            # Preserve refresh token if not provided in response
+            if 'refresh_token' not in new_tokens and 'refresh_token' in tokens:
+                new_tokens['refresh_token'] = tokens['refresh_token']
+            
+            with open(TOKEN_FILE, 'w') as f:
+                json.dump(new_tokens, f, indent=2)
+            
+            return True
+        else:
+            return False
+    except Exception:
+        return False
+
+def exchange_code_for_tokens(auth_code):
+    """Exchange authorization code for access tokens"""
+    redirect_uri = f"{get_replit_url()}/auth/callback"
+    
+    data = {
+        'grant_type': 'authorization_code',
+        'code': auth_code,
+        'redirect_uri': redirect_uri,
+        'client_id': STOCKX_CLIENT_ID,
+        'client_secret': STOCKX_CLIENT_SECRET,
+        'audience': 'gateway.stockx.com'
+    }
+    
+    response = requests.post(
+        'https://accounts.stockx.com/oauth/token',
+        data=data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}
+    )
+    
+    if response.status_code == 200:
+        tokens = response.json()
+        
+        with open(TOKEN_FILE, 'w') as f:
+            json.dump(tokens, f, indent=2)
+        
+        return True
+    else:
+        return False
+
+def ensure_authentication():
+    """Ensure we have valid authentication"""
+    global auth_state
+    
+    # Check if current token is valid
+    if is_token_valid():
+        auth_state['authenticated'] = True
+        return True
+    
+    # Try to refresh token
+    if can_refresh_token():
+        if refresh_access_token():
+            auth_state['authenticated'] = True
+            return True
+    
+    # Need full authentication
+    auth_state['authenticated'] = False
+    return False
 
 def run_script_async(script_id, command, working_dir=None):
     """Run script asynchronously and capture output"""
@@ -73,14 +213,22 @@ HTML_TEMPLATE = """
     <p>Run any script from your StockX project</p>
     <hr>
     
-    <h2>📊 Available Scripts</h2>
+    <h2>🔐 Authentication Status</h2>
+    {% if authenticated %}
+        <p style="color: green;">✅ <strong>Authenticated</strong> - StockX API is ready to use</p>
+    {% elif auth_in_progress %}
+        <p style="color: orange;">⏳ <strong>Authentication in progress...</strong></p>
+        <p>Please complete the authentication in the browser window that opened.</p>
+    {% elif auth_error %}
+        <p style="color: red;">❌ <strong>Authentication Error:</strong> {{ auth_error }}</p>
+        <p><a href="/auth/start" style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">Try Authentication Again</a></p>
+    {% else %}
+        <p style="color: orange;">⚠️ <strong>Not Authenticated</strong></p>
+        <p><a href="/auth/start" style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">Start Authentication</a></p>
+    {% endif %}
+    <hr>
     
-    <h3>🔐 Authentication</h3>
-    <form action="/run" method="post" style="margin: 10px 0;">
-        <input type="hidden" name="script" value="auth">
-        <input type="submit" value="Run Authentication System" style="padding: 5px 10px;">
-        <p>Authenticate with StockX API (required first)</p>
-    </form>
+    <h2>📊 Available Scripts</h2>
     
     <h3>📝 Examples & Testing</h3>
     <form action="/run" method="post" style="margin: 10px 0;">
@@ -140,9 +288,100 @@ HTML_TEMPLATE = """
 </html>
 """
 
+@app.route('/auth/callback')
+def auth_callback():
+    """Handle OAuth callback from StockX"""
+    global auth_state
+    
+    # Get authorization code from query parameters
+    auth_code = request.args.get('code')
+    error = request.args.get('error')
+    
+    if error:
+        auth_state['auth_error'] = error
+        auth_state['auth_in_progress'] = False
+        return render_template_string("""
+        <html>
+        <head><title>Authentication Error</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1 style="color: red;">❌ Authentication Error</h1>
+            <p>Error: {{ error }}</p>
+            <p><a href="/">Return to main page</a></p>
+        </body>
+        </html>
+        """, error=error)
+    
+    if auth_code:
+        # Exchange code for tokens
+        if exchange_code_for_tokens(auth_code):
+            auth_state['authenticated'] = True
+            auth_state['auth_in_progress'] = False
+            auth_state['auth_code'] = auth_code
+            
+            return render_template_string("""
+            <html>
+            <head><title>Authentication Success</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: green;">✅ Authentication Successful!</h1>
+                <p>StockX API is now ready to use.</p>
+                <p><a href="/">Return to main page</a></p>
+                <script>
+                    // Auto-redirect after 3 seconds
+                    setTimeout(function() {
+                        window.location.href = '/';
+                    }, 3000);
+                </script>
+            </body>
+            </html>
+            """)
+        else:
+            auth_state['auth_error'] = 'Token exchange failed'
+            auth_state['auth_in_progress'] = False
+            
+            return render_template_string("""
+            <html>
+            <head><title>Authentication Error</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: red;">❌ Authentication Error</h1>
+                <p>Failed to exchange authorization code for tokens.</p>
+                <p><a href="/">Return to main page</a></p>
+            </body>
+            </html>
+            """)
+    
+    return redirect(url_for('index'))
+
+@app.route('/auth/start')
+def start_auth():
+    """Start OAuth authentication flow"""
+    global auth_state
+    
+    redirect_uri = f"{get_replit_url()}/auth/callback"
+    state = secrets.token_urlsafe(32)
+    scope = 'openid offline_access read:catalog read:products read:market'
+    
+    auth_params = {
+        'client_id': STOCKX_CLIENT_ID,
+        'response_type': 'code',
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'scope': scope,
+        'audience': 'gateway.stockx.com'
+    }
+    
+    auth_url = f"https://accounts.stockx.com/authorize?{urlencode(auth_params)}"
+    auth_state['auth_in_progress'] = True
+    
+    return redirect(auth_url)
+
 @app.route('/')
 def index():
     """Main page with script options"""
+    global auth_state
+    
+    # Check authentication status
+    auth_status = ensure_authentication()
+    
     # Prepare outputs for display
     outputs = []
     for script_id, lines in process_outputs.items():
@@ -160,7 +399,10 @@ def index():
     return render_template_string(
         HTML_TEMPLATE,
         running_processes=running_processes.keys(),
-        outputs=outputs
+        outputs=outputs,
+        authenticated=auth_status,
+        auth_in_progress=auth_state.get('auth_in_progress', False),
+        auth_error=auth_state.get('auth_error', None)
     )
 
 @app.route('/run', methods=['POST'])
@@ -176,11 +418,7 @@ def run_script():
     script_id = f"{script}_{datetime.now().strftime('%H%M%S')}"
     
     # Define script commands
-    if script == 'auth':
-        command = 'python3 auto_auth_system.py'
-        working_dir = None
-        
-    elif script == 'examples':
+    if script == 'examples':
         command = 'python3 example.py'
         working_dir = None
         
