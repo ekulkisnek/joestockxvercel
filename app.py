@@ -6,6 +6,7 @@ Run any script from the web interface
 """
 
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, send_from_directory
+from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 import subprocess
 import threading
@@ -17,9 +18,13 @@ import secrets
 import webbrowser
 from urllib.parse import urlencode, parse_qs
 from datetime import datetime
+import signal
+import psutil
+import time
 
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # File upload configuration
 UPLOAD_FOLDER = 'uploads'
@@ -28,8 +33,13 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Store running processes and their outputs
-running_processes = {}
-process_outputs = {}
+running_processes = {}  # process_id -> process object
+process_outputs = {}    # process_id -> output lines
+process_pids = {}       # process_id -> PID for cleanup
+
+# Token refresh thread
+token_refresh_thread = None
+token_refresh_active = False
 
 # Create upload directory if it doesn't exist
 import os
@@ -122,11 +132,41 @@ def refresh_access_token():
             with open(TOKEN_FILE, 'w') as f:
                 json.dump(new_tokens, f, indent=2)
             
+            print(f"✅ Token refreshed successfully at {datetime.now()}")
             return True
         else:
+            print(f"❌ Token refresh failed: {response.status_code}")
             return False
-    except Exception:
+    except Exception as e:
+        print(f"❌ Error refreshing token: {str(e)}")
         return False
+
+def auto_refresh_token():
+    """Automatically refresh tokens every 11 hours"""
+    global token_refresh_active
+    token_refresh_active = True
+    
+    # Initial delay of 30 seconds to let the app start
+    time.sleep(30)
+    
+    while token_refresh_active:
+        # Sleep for 11 hours (39600 seconds) - refresh before 12 hour expiry
+        time.sleep(39600)
+        
+        if token_refresh_active:
+            success = refresh_access_token()
+            if not success:
+                print("❌ Failed to refresh token automatically")
+                # Try again in 1 hour if failed
+                time.sleep(3600)
+
+def start_token_refresh_thread():
+    """Start the automatic token refresh thread"""
+    global token_refresh_thread
+    if token_refresh_thread is None or not token_refresh_thread.is_alive():
+        token_refresh_thread = threading.Thread(target=auto_refresh_token, daemon=True)
+        token_refresh_thread.start()
+        print("🔄 Started automatic token refresh thread")
 
 def exchange_code_for_tokens(auth_code):
     """Exchange authorization code for access tokens"""
@@ -228,7 +268,7 @@ def check_real_authentication():
         return False
 
 def run_script_async(script_id, command, working_dir=None):
-    """Run script asynchronously and capture output"""
+    """Run script asynchronously and capture output with WebSocket streaming"""
     try:
         # Save current directory
         original_dir = os.getcwd()
@@ -241,9 +281,30 @@ def run_script_async(script_id, command, working_dir=None):
         if script_id not in process_outputs:
             process_outputs[script_id] = []
         
-        process_outputs[script_id].append(f"🚀 Executing: {command}")
-        process_outputs[script_id].append(f"📁 Working directory: {os.getcwd()}")
-        process_outputs[script_id].append("=" * 50)
+        initial_msg = f"🚀 Executing: {command}"
+        working_dir_msg = f"📁 Working directory: {os.getcwd()}"
+        separator = "=" * 50
+        
+        process_outputs[script_id].append(initial_msg)
+        process_outputs[script_id].append(working_dir_msg)
+        process_outputs[script_id].append(separator)
+        
+        # Emit initial messages via WebSocket
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': initial_msg,
+            'status': 'running'
+        })
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': working_dir_msg,
+            'status': 'running'
+        })
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': separator,
+            'status': 'running'
+        })
         
         # Use unbuffered output and set PYTHONUNBUFFERED for real-time progress
         env = os.environ.copy()
@@ -260,26 +321,52 @@ def run_script_async(script_id, command, working_dir=None):
         )
         
         running_processes[script_id] = process
+        process_pids[script_id] = process.pid
         
-        # Read output line by line
+        # Read output line by line and stream via WebSocket
         for line in iter(process.stdout.readline, ''):
             if line:
-                process_outputs[script_id].append(line.rstrip())
+                output_line = line.rstrip()
+                process_outputs[script_id].append(output_line)
+                
+                # Emit line via WebSocket
+                socketio.emit('process_output', {
+                    'script_id': script_id,
+                    'line': output_line,
+                    'status': 'running'
+                })
         
         # Wait for process to complete
         process.wait()
         
         # Add completion message
         if process.returncode == 0:
-            process_outputs[script_id].append("=" * 50)
-            process_outputs[script_id].append(f"✅ Script completed successfully (exit code: {process.returncode})")
+            completion_msg = f"✅ Script completed successfully (exit code: {process.returncode})"
+            status = 'completed'
         else:
-            process_outputs[script_id].append("=" * 50)
-            process_outputs[script_id].append(f"❌ Script failed (exit code: {process.returncode})")
+            completion_msg = f"❌ Script failed (exit code: {process.returncode})"
+            status = 'failed'
+        
+        process_outputs[script_id].append("=" * 50)
+        process_outputs[script_id].append(completion_msg)
+        
+        # Emit completion via WebSocket
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': "=" * 50,
+            'status': status
+        })
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': completion_msg,
+            'status': status
+        })
         
         # Remove from running processes
         if script_id in running_processes:
             del running_processes[script_id]
+        if script_id in process_pids:
+            del process_pids[script_id]
         
         # Restore original directory
         os.chdir(original_dir)
@@ -287,9 +374,23 @@ def run_script_async(script_id, command, working_dir=None):
     except Exception as e:
         if script_id not in process_outputs:
             process_outputs[script_id] = []
-        process_outputs[script_id].append(f"❌ Error running script: {str(e)}")
+        
+        error_msg = f"❌ Error running script: {str(e)}"
+        process_outputs[script_id].append(error_msg)
+        
+        # Emit error via WebSocket
+        socketio.emit('process_output', {
+            'script_id': script_id,
+            'line': error_msg,
+            'status': 'error'
+        })
+        
+        # Cleanup
         if script_id in running_processes:
             del running_processes[script_id]
+        if script_id in process_pids:
+            del process_pids[script_id]
+        
         # Restore original directory
         try:
             os.chdir(original_dir)
@@ -329,13 +430,126 @@ HTML_TEMPLATE = """
             100% { opacity: 1; }
         }
     </style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        // Auto-refresh page every 3 seconds if there are running processes
-        {% if running_processes %}
-        setTimeout(function() {
-            window.location.reload();
-        }, 3000);
-        {% endif %}
+        // Initialize WebSocket connection
+        const socket = io();
+        
+        // Track running processes
+        let runningProcesses = new Set();
+        
+        // Handle connection
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+        
+        // Handle process status updates
+        socket.on('process_status', function(data) {
+            runningProcesses = new Set(data.running_processes);
+            updateProcessDisplay();
+        });
+        
+        // Handle real-time process output
+        socket.on('process_output', function(data) {
+            const { script_id, line, status } = data;
+            
+            // Find or create output area for this process
+            let outputArea = document.getElementById('output-' + script_id);
+            if (!outputArea) {
+                createOutputArea(script_id);
+                outputArea = document.getElementById('output-' + script_id);
+            }
+            
+            // Add new line to output
+            const pre = outputArea.querySelector('pre');
+            if (pre) {
+                pre.textContent += line + '\n';
+                pre.scrollTop = pre.scrollHeight; // Auto-scroll to bottom
+            }
+            
+            // Update running processes tracking
+            if (status === 'running') {
+                runningProcesses.add(script_id);
+            } else if (status === 'completed' || status === 'failed' || status === 'stopped') {
+                runningProcesses.delete(script_id);
+            }
+            
+            updateProcessDisplay();
+        });
+        
+        // Create output area for a process
+        function createOutputArea(script_id) {
+            const container = document.getElementById('recent-activity');
+            if (!container) return;
+            
+            const outputDiv = document.createElement('div');
+            outputDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>${script_id} - ${new Date().toLocaleString()}</h3>
+                    <button onclick="stopProcess('${script_id}')" 
+                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                        Stop
+                    </button>
+                </div>
+                <div id="output-${script_id}">
+                    <pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"></pre>
+                </div>
+                <hr>
+            `;
+            
+            container.appendChild(outputDiv);
+        }
+        
+        // Update process display
+        function updateProcessDisplay() {
+            const processSection = document.querySelector('.running-processes');
+            if (!processSection) return;
+            
+            if (runningProcesses.size > 0) {
+                processSection.innerHTML = '<h2>🔄 Running Processes</h2>';
+                runningProcesses.forEach(processId => {
+                    processSection.innerHTML += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+                            <span class="running-indicator">⏳ ${processId} is running...</span>
+                            <button onclick="stopProcess('${processId}')" 
+                                    style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                                Stop
+                            </button>
+                        </div>
+                    `;
+                });
+            } else {
+                processSection.innerHTML = '<h2>🔄 Running Processes</h2><p>No processes currently running</p>';
+            }
+        }
+        
+        // Stop process function
+        function stopProcess(scriptId) {
+            if (confirm(`Are you sure you want to stop process: ${scriptId}?`)) {
+                fetch(`/stop_process/${scriptId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Process stopped successfully');
+                    } else {
+                        alert('Failed to stop process: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error stopping process: ' + error);
+                });
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProcessDisplay();
+        });
     </script>
 </head>
 <body>
@@ -428,32 +642,51 @@ HTML_TEMPLATE = """
     
     <hr>
     
-    <h2>🔄 Running Processes</h2>
-    {% if running_processes %}
-        {% for script_id in running_processes %}
-            <div class="progress-indicator">
-                <p class="running-indicator">⏳ {{ script_id }} is running...</p>
-                <p class="auto-refresh">🔄 Page refreshes every 3 seconds to show progress</p>
+    <div class="running-processes">
+        <h2>🔄 Running Processes</h2>
+        {% if running_processes %}
+            {% for script_id in running_processes %}
+                <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+                    <span class="running-indicator">⏳ {{ script_id }} is running...</span>
+                    <button onclick="stopProcess('{{ script_id }}')" 
+                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                        Stop
+                    </button>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No scripts currently running</p>
+        {% endif %}
+    </div>
+    
+    <div id="recent-activity">
+        <h2>📋 Recent Activity</h2>
+        <form action="/clear" method="post" style="margin: 10px 0;">
+            <input type="submit" value="Clear All Logs" style="padding: 5px 10px;">
+        </form>
+        
+        {% for script_id, output in outputs %}
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>{{ script_id }} - {{ output.timestamp }}</h3>
+                    {% if script_id in running_processes %}
+                        <button onclick="stopProcess('{{ script_id }}')" 
+                                style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                            Stop
+                        </button>
+                    {% endif %}
+                </div>
+                <div id="output-{{ script_id }}">
+                    <pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">{{ output.content }}</pre>
+                </div>
+                <hr>
             </div>
         {% endfor %}
-    {% else %}
-        <p>No scripts currently running</p>
-    {% endif %}
-    
-    <h2>📋 Recent Activity</h2>
-    <form action="/clear" method="post" style="margin: 10px 0;">
-        <input type="submit" value="Clear All Logs" style="padding: 5px 10px;">
-    </form>
-    
-    {% for script_id, output in outputs %}
-        <h3>{{ script_id }} - {{ output.timestamp }}</h3>
-        <pre>{{ output.content }}</pre>
-        <hr>
-    {% endfor %}
-    
-    {% if not outputs %}
-        <p>No recent activity</p>
-    {% endif %}
+        
+        {% if not outputs %}
+            <p>No recent activity</p>
+        {% endif %}
+    </div>
 </body>
 </html>
 """
@@ -849,10 +1082,97 @@ def status():
         'completed_processes': list(process_outputs.keys())
     })
 
+@app.route('/stop_process/<script_id>', methods=['POST'])
+def stop_process(script_id):
+    """Stop a running process"""
+    try:
+        if script_id in running_processes:
+            process = running_processes[script_id]
+            process.terminate()
+            
+            # Try to kill child processes too
+            try:
+                if script_id in process_pids:
+                    parent = psutil.Process(process_pids[script_id])
+                    children = parent.children(recursive=True)
+                    for child in children:
+                        child.terminate()
+                    # Wait a bit then kill if still running
+                    time.sleep(1)
+                    for child in children:
+                        if child.is_running():
+                            child.kill()
+                    parent.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+            
+            # Clean up
+            del running_processes[script_id]
+            if script_id in process_pids:
+                del process_pids[script_id]
+            
+            # Add stop message to output
+            if script_id in process_outputs:
+                process_outputs[script_id].append("🛑 Process stopped by user")
+            
+            # Emit stop message via WebSocket
+            socketio.emit('process_output', {
+                'script_id': script_id,
+                'line': "🛑 Process stopped by user",
+                'status': 'stopped'
+            })
+            
+            return jsonify({'success': True, 'message': 'Process stopped'})
+        else:
+            return jsonify({'success': False, 'message': 'Process not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/process_list')
+def process_list():
+    """Get list of running processes"""
+    return jsonify({
+        'running_processes': list(running_processes.keys()),
+        'process_count': len(running_processes)
+    })
+
+# WebSocket handlers
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    print(f'Client connected: {request.sid}')
+    
+    # Send current running processes to new client
+    emit('process_status', {
+        'running_processes': list(running_processes.keys()),
+        'process_count': len(running_processes)
+    })
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    print(f'Client disconnected: {request.sid}')
+
+@socketio.on('request_output')
+def handle_request_output(data):
+    """Send existing output for a process"""
+    script_id = data.get('script_id')
+    if script_id in process_outputs:
+        for line in process_outputs[script_id]:
+            emit('process_output', {
+                'script_id': script_id,
+                'line': line,
+                'status': 'running' if script_id in running_processes else 'completed'
+            })
+
 if __name__ == '__main__':
     print("🌐 Starting StockX Tools Web Interface...")
     print("📱 Access at: http://0.0.0.0:5000")
-    print("🔄 Refresh manually to see updates")
+    print("🔄 Real-time updates via WebSocket")
     print("=" * 50)
     
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # Start automatic token refresh thread
+    start_token_refresh_thread()
+    
+    # Use SocketIO instead of regular Flask
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)

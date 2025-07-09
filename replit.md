@@ -61,11 +61,17 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### Latest Updates (July 2025)
+- **Replaced page refresh with WebSocket real-time updates**: Eliminated clunky full-page refreshes with smooth WebSocket streaming for live progress tracking
+- **Added process management with stop functionality**: Users can now stop running processes from multiple browsers, with proper cleanup of child processes
+- **Implemented automatic token refresh**: Background thread refreshes StockX API tokens every 11 hours to prevent expiration (tokens expire after 12 hours)
+- **Enhanced user experience**: Stop buttons for each process, real-time progress without page reload, better visual feedback
+- **Improved process tracking**: PID tracking for proper process cleanup, WebSocket status updates, concurrent process management
+- **Added Flask-SocketIO integration**: Real-time bidirectional communication between client and server
 - **Integrated automatic authentication into web interface**: No manual authentication button required
 - **Added OAuth callback route**: `/auth/callback` for proper Replit deployment compatibility  
 - **Added file upload capability**: Users can upload CSV files directly through web interface
 - **Added download management**: `/downloads` page to view and download output CSV files
-- **Enhanced script execution debugging**: Better error tracking and output capture
+- **Enhanced script execution debugging**: Better error tracking and output capture with immediate output flushing
 - **Improved directory management**: Automatic creation of upload/output directories
 
 ## Data Flow

@@ -2,3 +2,6 @@ flask
 requests
 urllib3
 certifi 
+flask-socketio
+psutil
+werkzeug
