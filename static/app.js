@@ -15,6 +15,7 @@ function initWebSocket() {
     });
     
     socket.on('process_output', function(data) {
+        console.log('Received output:', data);
         addOutputLine(data.script_id, data.line);
     });
     
@@ -24,17 +25,28 @@ function initWebSocket() {
 }
 
 function addOutputLine(scriptId, line) {
+    console.log('Adding line for:', scriptId, line);
     var outputContainer = document.getElementById('output-' + scriptId);
+    console.log('Output container found:', outputContainer);
+    
     if (!outputContainer) {
+        console.log('Creating new container for:', scriptId);
         createOutputContainer(scriptId);
         outputContainer = document.getElementById('output-' + scriptId);
+    }
+    
+    if (!outputContainer) {
+        console.error('Failed to create/find output container for:', scriptId);
+        return;
     }
     
     var pre = outputContainer.querySelector('pre');
     if (pre) {
         pre.textContent = pre.textContent + line + '\n';
         pre.scrollTop = pre.scrollHeight;
+        console.log('Added line to existing pre');
     } else {
+        console.log('Creating new pre element');
         // Fallback: create the pre element if it doesn't exist
         var newPre = document.createElement('pre');
         newPre.style.background = '#f5f5f5';
@@ -46,17 +58,23 @@ function addOutputLine(scriptId, line) {
         newPre.style.whiteSpace = 'pre-wrap';
         newPre.textContent = line + '\n';
         outputContainer.appendChild(newPre);
+        console.log('Created new pre element');
     }
 }
 
 function createOutputContainer(scriptId) {
     var container = document.getElementById('recent-activity');
-    if (!container) return;
+    console.log('Container found:', container);
+    if (!container) {
+        console.error('recent-activity container not found!');
+        return;
+    }
     
     var div = document.createElement('div');
     var timestamp = new Date().toLocaleString();
-    div.innerHTML = '<h3>' + scriptId + ' - ' + timestamp + '</h3><div id="output-' + scriptId + '"><pre style="background: #f5f5f5; padding: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd;"></pre></div><hr>';
+    div.innerHTML = '<h3>' + scriptId + ' - ' + timestamp + '</h3><div id="output-' + scriptId + '"><pre style="background: #f5f5f5; padding: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; white-space: pre-wrap;"></pre></div><hr>';
     container.appendChild(div);
+    console.log('Created container for:', scriptId);
 }
 
 function updateRunningProcesses(processes) {

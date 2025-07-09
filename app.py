@@ -379,6 +379,10 @@ def run_script_async(script_id, command, working_dir=None):
         if process.returncode == 0:
             completion_msg = f"✅ Script completed successfully (exit code: {process.returncode})"
             status = 'completed'
+        elif process.returncode == -15:
+            # SIGTERM - process was stopped by user, this is normal
+            completion_msg = f"🛑 Script stopped by user (exit code: {process.returncode})"
+            status = 'stopped'
         else:
             completion_msg = f"❌ Script failed (exit code: {process.returncode})"
             status = 'failed'
