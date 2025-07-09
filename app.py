@@ -24,7 +24,27 @@ import time
 
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Initialize SocketIO with production-ready configuration
+try:
+    # Try with eventlet for production deployment
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*",
+        async_mode='eventlet',
+        logger=True,
+        engineio_logger=True
+    )
+except Exception as e:
+    print(f"⚠️ Could not initialize with eventlet, falling back to threading: {e}")
+    # Fallback to threading mode
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*",
+        async_mode='threading',
+        logger=False,
+        engineio_logger=False
+    )
 
 # File upload configuration
 UPLOAD_FOLDER = 'uploads'
@@ -63,11 +83,20 @@ auth_state = {
 
 def get_replit_url():
     """Get the Replit app URL for OAuth callback"""
-    # Use the correct Replit domain
+    # Try to get from environment variables
     replit_domain = os.getenv('REPLIT_DEV_DOMAIN')
-    
     if replit_domain:
         return f'https://{replit_domain}'
+    
+    # Try other Replit environment variables
+    replit_slug = os.getenv('REPL_SLUG')
+    replit_owner = os.getenv('REPL_OWNER')
+    if replit_slug and replit_owner:
+        return f'https://{replit_slug}.{replit_owner}.repl.co'
+    
+    # Check if we're in a deployed Replit environment
+    if os.getenv('REPLIT_DEPLOYMENT'):
+        return f'https://{os.getenv("REPL_ID", "unknown")}.replit.app'
     
     # Fallback for local development  
     return 'http://localhost:5000'
@@ -265,6 +294,7 @@ def check_real_authentication():
     except Exception as e:
         auth_state['authenticated'] = False
         auth_state['auth_error'] = f'Authentication check failed: {str(e)}'
+        print(f"⚠️ Authentication check failed: {e}")
         return False
 
 def run_script_async(script_id, command, working_dir=None):
@@ -1048,13 +1078,42 @@ def handle_request_output(data):
             })
 
 if __name__ == '__main__':
-    print("🌐 Starting StockX Tools Web Interface...")
-    print("📱 Access at: http://0.0.0.0:5000")
-    print("🔄 Real-time updates via WebSocket")
-    print("=" * 50)
-    
-    # Start automatic token refresh thread
-    start_token_refresh_thread()
-    
-    # Use SocketIO instead of regular Flask
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    try:
+        print("🌐 Starting StockX Tools Web Interface...")
+        print("📱 Access at: http://0.0.0.0:5000")
+        print("🔄 Real-time updates via WebSocket")
+        print("=" * 50)
+        
+        # Start automatic token refresh thread
+        try:
+            start_token_refresh_thread()
+        except Exception as e:
+            print(f"⚠️ Warning: Could not start token refresh thread: {e}")
+        
+        # Use SocketIO instead of regular Flask with production fixes
+        socketio.run(
+            app, 
+            host='0.0.0.0', 
+            port=5000, 
+            debug=False,
+            allow_unsafe_werkzeug=True,  # Fix for production deployment
+            use_reloader=False,          # Prevent reloader issues in production
+            log_output=True              # Enable logging for debugging
+        )
+    except Exception as e:
+        print(f"❌ Failed to start server: {e}")
+        print("🔄 Attempting fallback server configuration...")
+        try:
+            # Fallback configuration without unsafe_werkzeug
+            socketio.run(
+                app, 
+                host='0.0.0.0', 
+                port=5000, 
+                debug=False,
+                use_reloader=False
+            )
+        except Exception as fallback_error:
+            print(f"❌ Fallback also failed: {fallback_error}")
+            print("💡 Try running with: python app.py --production")
+            import sys
+            sys.exit(1)

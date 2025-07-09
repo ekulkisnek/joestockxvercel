@@ -72,7 +72,7 @@ deploymentTarget = "cloudrun"
 
 [nix]
 channel = "stable-24_05"
-packages = ["cacert"]
+packages = ["cacert", "iana-etc"]
 
 [[ports]]
 localPort = 5000

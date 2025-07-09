@@ -6,3 +6,4 @@ flask-socketio
 psutil
 werkzeug
 flask-socketio
+eventlet

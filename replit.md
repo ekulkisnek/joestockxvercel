@@ -61,6 +61,11 @@ Preferred communication style: Simple, everyday language.
 ## Recent Changes
 
 ### Latest Updates (July 2025)
+- **Fixed production deployment issues**: Added `allow_unsafe_werkzeug=True` to resolve Flask-SocketIO production errors
+- **Added eventlet support**: Installed eventlet package for production-ready SocketIO server with automatic fallback to threading mode
+- **Enhanced error handling**: Added comprehensive try-catch blocks to prevent crash loops from authentication failures
+- **Improved environment variable handling**: Better Replit domain detection with multiple fallback options for deployment
+- **Added production server configuration**: Disabled reloader and added proper logging for deployment environment
 - **Replaced page refresh with WebSocket real-time updates**: Eliminated clunky full-page refreshes with smooth WebSocket streaming for live progress tracking
 - **Added process management with stop functionality**: Users can now stop running processes from multiple browsers, with proper cleanup of child processes
 - **Implemented automatic token refresh**: Background thread refreshes StockX API tokens every 11 hours to prevent expiration (tokens expire after 12 hours)
