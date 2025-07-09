@@ -16,6 +16,11 @@ function initWebSocket() {
     
     socket.on('process_output', function(data) {
         console.log('Received output:', data);
+        // Add visual indicator that message was received
+        document.title = '* StockX Tools - New Output';
+        setTimeout(function() {
+            document.title = 'StockX Tools - Web Interface';
+        }, 1000);
         addOutputLine(data.script_id, data.line);
     });
     
@@ -42,9 +47,11 @@ function addOutputLine(scriptId, line) {
     
     var pre = outputContainer.querySelector('pre');
     if (pre) {
-        pre.textContent = pre.textContent + line + '\n';
+        // For existing containers, append to textContent properly
+        var currentContent = pre.textContent || '';
+        pre.textContent = currentContent + line + '\n';
         pre.scrollTop = pre.scrollHeight;
-        console.log('Added line to existing pre');
+        console.log('Added line to existing pre via textContent');
     } else {
         console.log('Creating new pre element');
         // Fallback: create the pre element if it doesn't exist
