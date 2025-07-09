@@ -60,8 +60,11 @@ class SmartStockXClient:
         """Ensure we have valid authentication"""
         if not self._is_token_valid():
             print("🔐 Authentication required...")
-            if not self._can_refresh_token() or not self._refresh_access_token():
+            if not self._can_refresh_token():
                 print("🌐 Starting full authentication...")
+                self._full_authentication()
+            elif not self._refresh_access_token():
+                print("🌐 Token refresh failed, starting full authentication...")
                 self._full_authentication()
     
     def _is_token_valid(self):
@@ -150,6 +153,13 @@ class SmartStockXClient:
         
         print("\n📝 After logging in, you'll be redirected to example.com")
         print("📋 Copy the 'code' parameter from the URL and paste it below:")
+        
+        # Check if we're in a non-interactive environment (like from Flask app)
+        import sys
+        if not sys.stdin.isatty():
+            print("❌ Cannot authenticate in non-interactive environment")
+            print("💡 Please authenticate through the web interface first")
+            raise Exception("Non-interactive authentication not supported")
         
         auth_code = input("Enter authorization code: ").strip()
         

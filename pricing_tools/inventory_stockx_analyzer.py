@@ -45,7 +45,8 @@ class InventoryItem:
 class InventoryStockXAnalyzer:
     def __init__(self):
         """Initialize with StockX client"""
-        self.client = SmartStockXClient()
+        # Initialize client without auto-authentication first
+        self.client = SmartStockXClient(auto_authenticate=False)
         self.processed_count = 0
         self.matches_found = 0
         self.cache = {}
@@ -55,6 +56,9 @@ class InventoryStockXAnalyzer:
             self.client.token_file = '../tokens_full_scope.json'
         else:
             self.client.token_file = 'tokens_full_scope.json'
+        
+        # Now ensure authentication with correct path
+        self.client._ensure_authentication()
 
     def parse_csv_flexible(self, csv_file: str) -> List[InventoryItem]:
         """Parse CSV file flexibly - handles multiple formats"""
@@ -572,7 +576,16 @@ class InventoryStockXAnalyzer:
             return ""
 
         print(f"\n🔍 Processing {len(items)} items...")
+        
+        # Calculate estimated time (2 seconds per item)
+        estimated_seconds = len(items) * 2
+        estimated_minutes = estimated_seconds / 60
+        print(f"⏱️  Estimated time: {estimated_minutes:.1f} minutes")
+        print(f"🔄 Processing at safe rate (30 items/minute) to avoid API limits")
+        print("=" * 80)
 
+        start_time = time.time()
+        
         for i, item in enumerate(items, 1):
             print(f"\n[{i}/{len(items)}] {item.shoe_name} - Size {item.size}")
 
@@ -585,9 +598,15 @@ class InventoryStockXAnalyzer:
             # Optimal rate limiting based on testing: 2 seconds = 30 requests/min
             time.sleep(2.0)
 
-            # Progress update every 15 items
-            if i % 15 == 0:
-                print(f"   📊 Progress: {i}/{len(items)} items processed ({self.matches_found} matches found)")
+            # Progress update every 5 items with time estimation
+            if i % 5 == 0:
+                elapsed = time.time() - start_time
+                remaining_items = len(items) - i
+                remaining_time = (remaining_items * 2) / 60  # 2 seconds per item
+                
+                progress_percent = (i / len(items)) * 100
+                print(f"   📊 Progress: {i}/{len(items)} ({progress_percent:.1f}%) - {self.matches_found} matches found")
+                print(f"   ⏱️  Estimated time remaining: {remaining_time:.1f} minutes")
 
         self._write_enhanced_csv(items, output_file)
 
