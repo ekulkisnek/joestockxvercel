@@ -156,24 +156,61 @@ def allowed_file(filename):
     """Check if file has allowed extension"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def ensure_authentication():
-    """Ensure we have valid authentication"""
+def check_real_authentication():
+    """Check REAL authentication status with actual API call - no fake responses"""
     global auth_state
     
-    # Check if current token is valid
-    if is_token_valid():
-        auth_state['authenticated'] = True
-        return True
-    
-    # Try to refresh token
-    if can_refresh_token():
-        if refresh_access_token():
-            auth_state['authenticated'] = True
-            return True
-    
-    # Need full authentication
-    auth_state['authenticated'] = False
-    return False
+    try:
+        # First check if token file exists
+        if not os.path.exists(TOKEN_FILE):
+            auth_state['authenticated'] = False
+            auth_state['auth_error'] = 'No token file found - authentication required'
+            return False
+        
+        # Load and validate token
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        
+        if 'access_token' not in tokens:
+            auth_state['authenticated'] = False
+            auth_state['auth_error'] = 'Invalid token file - no access token'
+            return False
+        
+        # Make REAL API call to verify authentication
+        headers = {
+            'Authorization': f'Bearer {tokens["access_token"]}',
+            'x-api-key': STOCKX_API_KEY
+        }
+        
+        response = requests.get(
+            'https://api.stockx.com/v2/catalog/search?query=nike&pageSize=1',
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'products' in data and len(data['products']) > 0:
+                auth_state['authenticated'] = True
+                auth_state['auth_error'] = None
+                return True
+            else:
+                auth_state['authenticated'] = False
+                auth_state['auth_error'] = 'API returned empty data - token may be invalid'
+                return False
+        else:
+            auth_state['authenticated'] = False
+            auth_state['auth_error'] = f'API authentication failed - HTTP {response.status_code}'
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        auth_state['authenticated'] = False
+        auth_state['auth_error'] = f'Network error during authentication check: {str(e)}'
+        return False
+    except Exception as e:
+        auth_state['authenticated'] = False
+        auth_state['auth_error'] = f'Authentication check failed: {str(e)}'
+        return False
 
 def run_script_async(script_id, command, working_dir=None):
     """Run script asynchronously and capture output"""
@@ -264,18 +301,23 @@ HTML_TEMPLATE = """
     
     <hr>
     
-    <h2>🔐 Authentication Status</h2>
+    <h2>🔐 REAL Authentication Status</h2>
     {% if authenticated %}
-        <p style="color: green;">✅ <strong>Authenticated</strong> - StockX API is ready to use</p>
+        <p style="color: green; font-weight: bold;">✅ VERIFIED AUTHENTICATED - Real API connection confirmed</p>
+        <p style="color: green; font-size: 12px;">Last verified with live StockX API call</p>
     {% elif auth_in_progress %}
-        <p style="color: orange;">⏳ <strong>Authentication in progress...</strong></p>
-        <p>Please complete the authentication in the browser window that opened.</p>
+        <p style="color: orange; font-weight: bold;">⏳ Authentication in progress...</p>
+        <p>Complete the authentication in the browser window that opened.</p>
     {% elif auth_error %}
-        <p style="color: red;">❌ <strong>Authentication Error:</strong> {{ auth_error }}</p>
-        <p><a href="/auth/start" style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">Try Authentication Again</a></p>
+        <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
+        <p style="color: red;">Error: {{ auth_error }}</p>
+        <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
+        <p style="color: red; font-size: 12px;">Scripts will fail until authentication is complete</p>
     {% else %}
-        <p style="color: orange;">⚠️ <strong>Not Authenticated</strong></p>
-        <p><a href="/auth/start" style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">Start Authentication</a></p>
+        <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
+        <p style="color: red;">No valid authentication found</p>
+        <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
+        <p style="color: red; font-size: 12px;">Scripts will fail until authentication is complete</p>
     {% endif %}
     <hr>
     
@@ -456,8 +498,8 @@ def index():
     """Main page with script options"""
     global auth_state
     
-    # Check authentication status
-    auth_status = ensure_authentication()
+    # ALWAYS check REAL authentication status with actual API call
+    auth_status = check_real_authentication()
     
     # Prepare outputs for display
     outputs = []
@@ -484,7 +526,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handle file upload"""
+    """Handle file upload - REQUIRES REAL AUTHENTICATION"""
     if 'file' not in request.files:
         flash('No file selected')
         return redirect(url_for('index'))
@@ -494,6 +536,11 @@ def upload_file():
     
     if file.filename == '':
         flash('No file selected')
+        return redirect(url_for('index'))
+    
+    # VERIFY REAL AUTHENTICATION BEFORE PROCESSING UPLOAD
+    if not check_real_authentication():
+        flash('❌ UPLOAD BLOCKED: Authentication required. Please authenticate first.')
         return redirect(url_for('index'))
     
     if file and allowed_file(file.filename):
@@ -610,11 +657,16 @@ def download_file(directory, filename):
 
 @app.route('/run', methods=['POST'])
 def run_script():
-    """Run selected script"""
+    """Run selected script - REQUIRES REAL AUTHENTICATION"""
     script = request.form.get('script')
     file_param = request.form.get('file', '').strip()
     
     if not script:
+        return redirect(url_for('index'))
+    
+    # VERIFY REAL AUTHENTICATION BEFORE RUNNING ANY SCRIPT
+    if not check_real_authentication():
+        flash('❌ SCRIPT BLOCKED: Authentication required. Please authenticate first.')
         return redirect(url_for('index'))
     
     # Generate script ID with timestamp
