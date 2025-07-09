@@ -301,10 +301,9 @@ HTML_TEMPLATE = """
     
     <hr>
     
-    <h2>🔐 REAL Authentication Status</h2>
+    <h2>🔐 Authentication Status</h2>
     {% if authenticated %}
-        <p style="color: green; font-weight: bold;">✅ VERIFIED AUTHENTICATED - Real API connection confirmed</p>
-        <p style="color: green; font-size: 12px;">Last verified with live StockX API call</p>
+        <p style="color: green; font-weight: bold;">✅ Authenticated - StockX API is ready to use</p>
     {% elif auth_in_progress %}
         <p style="color: orange; font-weight: bold;">⏳ Authentication in progress...</p>
         <p>Complete the authentication in the browser window that opened.</p>
@@ -312,13 +311,14 @@ HTML_TEMPLATE = """
         <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
         <p style="color: red;">Error: {{ auth_error }}</p>
         <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
-        <p style="color: red; font-size: 12px;">Scripts will fail until authentication is complete</p>
     {% else %}
         <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
-        <p style="color: red;">No valid authentication found</p>
         <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
-        <p style="color: red; font-size: 12px;">Scripts will fail until authentication is complete</p>
     {% endif %}
+    
+    <form action="/verify" method="post" style="margin: 10px 0;">
+        <input type="submit" value="Verify Authentication & Show Real Data" style="padding: 5px 10px; background: #17a2b8; color: white; border: none;">
+    </form>
     <hr>
     
     <h2>📊 Available Scripts</h2>
@@ -492,6 +492,44 @@ def start_auth():
     auth_state['auth_in_progress'] = True
     
     return redirect(auth_url)
+
+@app.route('/verify', methods=['POST'])
+def verify_auth():
+    """Verify authentication and show real API data"""
+    try:
+        # Load token
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        
+        headers = {
+            'Authorization': f'Bearer {tokens["access_token"]}',
+            'x-api-key': STOCKX_API_KEY
+        }
+        
+        # Make real API call
+        response = requests.get(
+            'https://api.stockx.com/v2/catalog/search?query=jordan&pageSize=3',
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            products = data.get('products', [])
+            
+            if products:
+                flash(f'✅ REAL API DATA VERIFIED - Found {data.get("count", 0)} Jordan products')
+                for i, product in enumerate(products[:3], 1):
+                    flash(f'{i}. {product.get("name", "Unknown")} - Style: {product.get("styleId", "N/A")}')
+            else:
+                flash('❌ API returned no products')
+        else:
+            flash(f'❌ API failed - Status: {response.status_code}')
+            
+    except Exception as e:
+        flash(f'❌ Verification failed: {str(e)}')
+    
+    return redirect(url_for('index'))
 
 @app.route('/')
 def index():
