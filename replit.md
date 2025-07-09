@@ -52,10 +52,21 @@ Preferred communication style: Simple, everyday language.
 - **Output**: Enhanced CSV with bid/ask prices, SKUs, and profit margins
 
 ### 5. Web Interface (`app.py`)
-- **Purpose**: Minimal Flask web UI for running scripts
-- **Features**: Async script execution, real-time output streaming
-- **Architecture**: Simple web interface with subprocess management
-- **Functionality**: Web-based tool launcher with progress tracking
+- **Purpose**: Minimal Flask web UI for running scripts with file upload capability
+- **Features**: Async script execution, real-time output streaming, CSV file upload, file download management
+- **Architecture**: Simple web interface with subprocess management and file handling
+- **Functionality**: Web-based tool launcher with progress tracking, automatic authentication integration
+- **File Management**: Upload directory for user files, download interface for results
+
+## Recent Changes
+
+### Latest Updates (July 2025)
+- **Integrated automatic authentication into web interface**: No manual authentication button required
+- **Added OAuth callback route**: `/auth/callback` for proper Replit deployment compatibility  
+- **Added file upload capability**: Users can upload CSV files directly through web interface
+- **Added download management**: `/downloads` page to view and download output CSV files
+- **Enhanced script execution debugging**: Better error tracking and output capture
+- **Improved directory management**: Automatic creation of upload/output directories
 
 ## Data Flow
 
@@ -116,9 +127,10 @@ project_root/
 ├── smart_stockx_client.py       # Core API client
 ├── auto_auth_system.py          # Authentication system
 ├── example.py                   # Usage examples
-├── app.py                       # Web interface
+├── app.py                       # Web interface with file upload
 ├── requirements.txt             # Dependencies
 ├── tokens_full_scope.json       # Token storage
+├── uploads/                     # User uploaded CSV files
 ├── ebay_tools/                  # eBay integration
 │   ├── ebay_stockxpricing.py   # Price comparison tool
 │   └── csv_inputs/             # Input CSV files

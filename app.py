@@ -5,7 +5,8 @@
 Run any script from the web interface
 """
 
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, send_from_directory
+from werkzeug.utils import secure_filename
 import subprocess
 import threading
 import os
@@ -18,10 +19,22 @@ from urllib.parse import urlencode, parse_qs
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = 'stockx_tools_secret_key_2025'
+
+# File upload configuration
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'csv'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Store running processes and their outputs
 running_processes = {}
 process_outputs = {}
+
+# Create upload directory if it doesn't exist
+import os
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 # StockX OAuth configuration
 STOCKX_API_KEY = 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp'
@@ -139,6 +152,10 @@ def exchange_code_for_tokens(auth_code):
     else:
         return False
 
+def allowed_file(filename):
+    """Check if file has allowed extension"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 def ensure_authentication():
     """Ensure we have valid authentication"""
     global auth_state
@@ -234,6 +251,17 @@ HTML_TEMPLATE = """
 <body>
     <h1>🤖 StockX Tools - Web Interface</h1>
     <p>Run any script from your StockX project</p>
+    
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div style="padding: 10px; margin: 10px 0; background: #d4edda; border: 1px solid #c3e6cb; color: #155724; border-radius: 4px;">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
     <hr>
     
     <h2>🔐 Authentication Status</h2>
@@ -261,22 +289,48 @@ HTML_TEMPLATE = """
     </form>
     
     <h3>💰 eBay Tools</h3>
-    <form action="/run" method="post" style="margin: 10px 0;">
-        <input type="hidden" name="script" value="ebay">
-        <label for="ebay_file">CSV File (in ebay_tools/ directory):</label><br>
-        <input type="text" name="file" id="ebay_file" placeholder="example.csv" style="width: 300px; margin: 5px 0;"><br>
-        <input type="submit" value="Run eBay Price Analysis" style="padding: 5px 10px;">
-        <p>Compare eBay auction data with StockX prices</p>
-    </form>
+    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9;">
+        <h4>📁 Upload CSV File</h4>
+        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+            <input type="hidden" name="script_type" value="ebay">
+            <label for="ebay_upload">Choose eBay CSV file from your computer:</label><br>
+            <input type="file" name="file" id="ebay_upload" accept=".csv" style="margin: 5px 0;"><br>
+            <input type="submit" value="Upload & Run eBay Analysis" style="padding: 5px 10px; background: #28a745; color: white; border: none;">
+        </form>
+        
+        <h4>📝 Or specify existing file</h4>
+        <form action="/run" method="post" style="margin: 10px 0;">
+            <input type="hidden" name="script" value="ebay">
+            <label for="ebay_file">CSV File (in ebay_tools/ directory):</label><br>
+            <input type="text" name="file" id="ebay_file" placeholder="example.csv" style="width: 300px; margin: 5px 0;"><br>
+            <input type="submit" value="Run eBay Price Analysis" style="padding: 5px 10px;">
+        </form>
+        <p><em>Compare eBay auction data with StockX prices</em></p>
+    </div>
     
     <h3>📊 Inventory Analysis</h3>
-    <form action="/run" method="post" style="margin: 10px 0;">
-        <input type="hidden" name="script" value="inventory">
-        <label for="inventory_file">CSV File (in pricing_tools/ directory):</label><br>
-        <input type="text" name="file" id="inventory_file" placeholder="inventory.csv" style="width: 300px; margin: 5px 0;"><br>
-        <input type="submit" value="Run Inventory Analysis" style="padding: 5px 10px;">
-        <p>Analyze inventory CSV against StockX market data</p>
-    </form>
+    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9;">
+        <h4>📁 Upload CSV File</h4>
+        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+            <input type="hidden" name="script_type" value="inventory">
+            <label for="inventory_upload">Choose inventory CSV file from your computer:</label><br>
+            <input type="file" name="file" id="inventory_upload" accept=".csv" style="margin: 5px 0;"><br>
+            <input type="submit" value="Upload & Run Inventory Analysis" style="padding: 5px 10px; background: #28a745; color: white; border: none;">
+        </form>
+        
+        <h4>📝 Or specify existing file</h4>
+        <form action="/run" method="post" style="margin: 10px 0;">
+            <input type="hidden" name="script" value="inventory">
+            <label for="inventory_file">CSV File (in pricing_tools/ directory):</label><br>
+            <input type="text" name="file" id="inventory_file" placeholder="inventory.csv" style="width: 300px; margin: 5px 0;"><br>
+            <input type="submit" value="Run Inventory Analysis" style="padding: 5px 10px;">
+        </form>
+        <p><em>Analyze inventory CSV against StockX market data</em></p>
+    </div>
+    
+    <h3>📁 Download Results</h3>
+    <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none;">View & Download Output Files</a></p>
+    <p><em>CSV outputs are saved to: uploads/, ebay_tools/, and pricing_tools/ directories</em></p>
     
     <hr>
     
@@ -427,6 +481,132 @@ def index():
         auth_in_progress=auth_state.get('auth_in_progress', False),
         auth_error=auth_state.get('auth_error', None)
     )
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload"""
+    if 'file' not in request.files:
+        flash('No file selected')
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    script_type = request.form.get('script_type')
+    
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('index'))
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        # Add timestamp to prevent conflicts
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        flash(f'File uploaded successfully: {filename}')
+        
+        # Auto-run the script with uploaded file
+        script_id = f"{script_type}_{datetime.now().strftime('%H%M%S')}"
+        
+        if script_type == 'ebay':
+            command = f'python3 ebay_stockxpricing.py "../uploads/{filename}"'
+            working_dir = 'ebay_tools'
+        elif script_type == 'inventory':
+            command = f'python3 inventory_stockx_analyzer.py "../uploads/{filename}"'
+            working_dir = 'pricing_tools'
+        else:
+            flash('Invalid script type')
+            return redirect(url_for('index'))
+        
+        # Start script in background thread
+        thread = threading.Thread(
+            target=run_script_async,
+            args=(script_id, command, working_dir)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return redirect(url_for('index'))
+    else:
+        flash('Invalid file type. Please upload a CSV file.')
+        return redirect(url_for('index'))
+
+@app.route('/downloads')
+def list_downloads():
+    """List available output files for download"""
+    download_dirs = ['ebay_tools', 'pricing_tools', 'uploads']
+    files = []
+    
+    for directory in download_dirs:
+        if os.path.exists(directory):
+            for filename in os.listdir(directory):
+                if filename.endswith('.csv'):
+                    filepath = os.path.join(directory, filename)
+                    file_info = {
+                        'name': filename,
+                        'path': directory,
+                        'size': os.path.getsize(filepath),
+                        'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    files.append(file_info)
+    
+    # Sort by modification time (newest first)
+    files.sort(key=lambda x: x['modified'], reverse=True)
+    
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Download Files - StockX Tools</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="font-family: Arial; padding: 20px;">
+        <h1>📁 Download Files</h1>
+        <p><a href="/">← Back to main page</a></p>
+        <hr>
+        
+        {% if files %}
+            <h2>Available CSV Files</h2>
+            <table border="1" style="border-collapse: collapse; width: 100%;">
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 10px; text-align: left;">File Name</th>
+                    <th style="padding: 10px; text-align: left;">Directory</th>
+                    <th style="padding: 10px; text-align: left;">Size</th>
+                    <th style="padding: 10px; text-align: left;">Modified</th>
+                    <th style="padding: 10px; text-align: left;">Download</th>
+                </tr>
+                {% for file in files %}
+                <tr>
+                    <td style="padding: 10px;">{{ file.name }}</td>
+                    <td style="padding: 10px;">{{ file.path }}</td>
+                    <td style="padding: 10px;">{{ "%.1f"|format(file.size/1024) }} KB</td>
+                    <td style="padding: 10px;">{{ file.modified }}</td>
+                    <td style="padding: 10px;">
+                        <a href="/download/{{ file.path }}/{{ file.name }}" 
+                           style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">
+                            Download
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>No CSV files found. Upload and process files to see results here.</p>
+        {% endif %}
+    </body>
+    </html>
+    """, files=files)
+
+@app.route('/download/<path:directory>/<filename>')
+def download_file(directory, filename):
+    """Download a specific file"""
+    try:
+        return send_from_directory(directory, filename, as_attachment=True)
+    except FileNotFoundError:
+        flash('File not found')
+        return redirect(url_for('list_downloads'))
 
 @app.route('/run', methods=['POST'])
 def run_script():
