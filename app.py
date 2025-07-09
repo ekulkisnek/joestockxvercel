@@ -40,7 +40,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 STOCKX_API_KEY = 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp'
 STOCKX_CLIENT_ID = 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL'
 STOCKX_CLIENT_SECRET = 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn'
-TOKEN_FILE = 'tokens_full_scope.json'
+TOKEN_FILE = os.path.join(os.getcwd(), 'tokens_full_scope.json')
 
 # Global auth state
 auth_state = {
