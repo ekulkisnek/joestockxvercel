@@ -432,121 +432,98 @@ HTML_TEMPLATE = """
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
-        // Initialize WebSocket connection
-        const socket = io();
+        var socket = io();
+        var runningProcesses = [];
         
-        // Track running processes
-        let runningProcesses = new Set();
-        
-        // Handle connection
         socket.on('connect', function() {
-            console.log('Connected to server');
+            console.log('Connected to WebSocket');
         });
         
-        // Handle process status updates
         socket.on('process_status', function(data) {
-            runningProcesses = new Set(data.running_processes);
+            runningProcesses = data.running_processes;
             updateProcessDisplay();
         });
         
-        // Handle real-time process output
         socket.on('process_output', function(data) {
-            const { script_id, line, status } = data;
-            
-            // Find or create output area for this process
-            let outputArea = document.getElementById('output-' + script_id);
+            var outputArea = document.getElementById('output-' + data.script_id);
             if (!outputArea) {
-                createOutputArea(script_id);
-                outputArea = document.getElementById('output-' + script_id);
+                createOutputArea(data.script_id);
+                outputArea = document.getElementById('output-' + data.script_id);
             }
             
-            // Add new line to output
-            const pre = outputArea.querySelector('pre');
+            var pre = outputArea.querySelector('pre');
             if (pre) {
-                pre.textContent += line + '\n';
-                pre.scrollTop = pre.scrollHeight; // Auto-scroll to bottom
+                pre.textContent += data.line + '\n';
+                pre.scrollTop = pre.scrollHeight;
             }
             
-            // Update running processes tracking
-            if (status === 'running') {
-                runningProcesses.add(script_id);
-            } else if (status === 'completed' || status === 'failed' || status === 'stopped') {
-                runningProcesses.delete(script_id);
+            if (data.status === 'running') {
+                if (runningProcesses.indexOf(data.script_id) === -1) {
+                    runningProcesses.push(data.script_id);
+                }
+            } else {
+                var index = runningProcesses.indexOf(data.script_id);
+                if (index > -1) {
+                    runningProcesses.splice(index, 1);
+                }
             }
             
             updateProcessDisplay();
         });
         
-        // Create output area for a process
         function createOutputArea(script_id) {
-            const container = document.getElementById('recent-activity');
+            var container = document.getElementById('recent-activity');
             if (!container) return;
             
-            const outputDiv = document.createElement('div');
-            outputDiv.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>${script_id} - ${new Date().toLocaleString()}</h3>
-                    <button onclick="stopProcess('${script_id}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                        Stop
-                    </button>
-                </div>
-                <div id="output-${script_id}">
-                    <pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"></pre>
-                </div>
-                <hr>
-            `;
+            var outputDiv = document.createElement('div');
+            var timestamp = new Date().toLocaleString();
+            outputDiv.innerHTML = '<div><h3>' + script_id + ' - ' + timestamp + '</h3>' +
+                '<div id="output-' + script_id + '">' +
+                '<pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;"></pre>' +
+                '</div></div>';
             
             container.appendChild(outputDiv);
         }
         
-        // Update process display
         function updateProcessDisplay() {
-            const processSection = document.querySelector('.running-processes');
+            var processSection = document.querySelector('.running-processes');
             if (!processSection) return;
             
-            if (runningProcesses.size > 0) {
-                processSection.innerHTML = '<h2>🔄 Running Processes</h2>';
-                runningProcesses.forEach(processId => {
-                    processSection.innerHTML += `
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
-                            <span class="running-indicator">⏳ ${processId} is running...</span>
-                            <button onclick="stopProcess('${processId}')" 
-                                    style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                                Stop
-                            </button>
-                        </div>
-                    `;
-                });
+            if (runningProcesses.length > 0) {
+                var html = '<h2>Running Processes</h2>';
+                for (var i = 0; i < runningProcesses.length; i++) {
+                    html += '<div style="margin: 10px 0;">' +
+                           '<span>' + runningProcesses[i] + ' is running...</span>' +
+                           '<button onclick="stopProcess(&quot;' + runningProcesses[i] + '&quot;)" style="margin-left: 10px;">Stop</button>' +
+                           '</div>';
+                }
+                processSection.innerHTML = html;
             } else {
-                processSection.innerHTML = '<h2>🔄 Running Processes</h2><p>No processes currently running</p>';
+                processSection.innerHTML = '<h2>Running Processes</h2><p>No processes currently running</p>';
             }
         }
         
-        // Stop process function
         function stopProcess(scriptId) {
-            if (confirm(`Are you sure you want to stop process: ${scriptId}?`)) {
-                fetch(`/stop_process/${scriptId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
+            if (confirm('Stop process: ' + scriptId + '?')) {
+                fetch('/stop_process/' + scriptId, {
+                    method: 'POST'
                 })
-                .then(response => response.json())
-                .then(data => {
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
                     if (data.success) {
-                        alert('Process stopped successfully');
+                        alert('Process stopped');
                     } else {
-                        alert('Failed to stop process: ' + data.message);
+                        alert('Failed to stop: ' + data.message);
                     }
                 })
-                .catch(error => {
-                    alert('Error stopping process: ' + error);
+                .catch(function(error) {
+                    alert('Error: ' + error);
                 });
             }
         }
         
-        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             updateProcessDisplay();
         });

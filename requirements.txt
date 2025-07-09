@@ -5,3 +5,4 @@ certifi
 flask-socketio
 psutil
 werkzeug
+flask-socketio
