@@ -47,7 +47,8 @@ auth_state = {
     'authenticated': False,
     'auth_in_progress': False,
     'auth_code': None,
-    'auth_error': None
+    'auth_error': None,
+    'token_info': None
 }
 
 def get_replit_url():
@@ -161,7 +162,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def check_real_authentication():
-    """Check REAL authentication status with actual API call - no fake responses"""
+    """Check REAL authentication status with actual API call"""
     global auth_state
     
     try:
@@ -169,6 +170,7 @@ def check_real_authentication():
         if not os.path.exists(TOKEN_FILE):
             auth_state['authenticated'] = False
             auth_state['auth_error'] = 'No token file found - authentication required'
+            auth_state['token_info'] = None
             return False
         
         # Load and validate token
@@ -178,7 +180,16 @@ def check_real_authentication():
         if 'access_token' not in tokens:
             auth_state['authenticated'] = False
             auth_state['auth_error'] = 'Invalid token file - no access token'
+            auth_state['token_info'] = None
             return False
+        
+        # Store token info for display
+        auth_state['token_info'] = {
+            'access_token': tokens['access_token'][:50] + '...',  # Truncate for display
+            'has_refresh_token': 'refresh_token' in tokens,
+            'token_type': tokens.get('token_type', 'Bearer'),
+            'expires_in': tokens.get('expires_in', 'Unknown')
+        }
         
         # Make REAL API call to verify authentication
         headers = {
@@ -194,7 +205,7 @@ def check_real_authentication():
         
         if response.status_code == 200:
             data = response.json()
-            if 'products' in data and len(data['products']) > 0:
+            if 'products' in data:
                 auth_state['authenticated'] = True
                 auth_state['auth_error'] = None
                 return True
@@ -288,10 +299,27 @@ HTML_TEMPLATE = """
     <title>StockX Tools - Web Interface</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .auth-section { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .search-section { background: #e7f3ff; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .upload-section { background: #f0f8f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .results-section { background: #fff3cd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .token-info { background: #f8f9fa; padding: 10px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 4px; font-family: monospace; }
+        pre { background: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; max-height: 400px; overflow-y: auto; border-radius: 4px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .warning { color: orange; font-weight: bold; }
+        input[type="text"] { width: 300px; padding: 5px; margin: 5px; }
+        button, input[type="submit"] { padding: 8px 15px; margin: 5px; cursor: pointer; }
+        .auth-button { background: #dc3545; color: white; border: none; text-decoration: none; padding: 8px 15px; border-radius: 4px; }
+        .search-button { background: #28a745; color: white; border: none; }
+        .upload-button { background: #007bff; color: white; border: none; }
+    </style>
 </head>
 <body>
     <h1>🤖 StockX Tools - Web Interface</h1>
-    <p>Run any script from your StockX project</p>
+    <p>Complete StockX API integration with authentication, search, and bulk analysis</p>
     
     {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -303,80 +331,79 @@ HTML_TEMPLATE = """
         {% endif %}
     {% endwith %}
     
-    <hr>
-    
-    <h2>🔐 Authentication Status</h2>
-    {% if authenticated %}
-        <p style="color: green; font-weight: bold;">✅ Authenticated - StockX API is ready to use</p>
-    {% elif auth_in_progress %}
-        <p style="color: orange; font-weight: bold;">⏳ Authentication in progress...</p>
-        <p>Complete the authentication in the browser window that opened.</p>
-    {% elif auth_error %}
-        <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
-        <p style="color: red;">Error: {{ auth_error }}</p>
-        <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
-    {% else %}
-        <p style="color: red; font-weight: bold;">❌ NOT AUTHENTICATED</p>
-        <p><a href="/auth/start" style="padding: 5px 10px; background: #dc3545; color: white; text-decoration: none; font-weight: bold;">AUTHENTICATE NOW</a></p>
-    {% endif %}
-    
-    <form action="/verify" method="post" style="margin: 10px 0;">
-        <input type="submit" value="Verify Authentication & Show Real Data" style="padding: 5px 10px; background: #17a2b8; color: white; border: none;">
-    </form>
-    <hr>
-    
-    <h2>📊 Available Scripts</h2>
-    
-    <h3>📝 Examples & Testing</h3>
-    <form action="/run" method="post" style="margin: 10px 0;">
-        <input type="hidden" name="script" value="examples">
-        <input type="submit" value="Run Examples" style="padding: 5px 10px;">
-        <p>Test API with example searches</p>
-    </form>
-    
-    <h3>💰 eBay Tools</h3>
-    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9;">
-        <h4>📁 Upload CSV File</h4>
-        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
-            <input type="hidden" name="script_type" value="ebay">
-            <label for="ebay_upload">Choose eBay CSV file from your computer:</label><br>
-            <input type="file" name="file" id="ebay_upload" accept=".csv" style="margin: 5px 0;"><br>
-            <input type="submit" value="Upload & Run eBay Analysis" style="padding: 5px 10px; background: #28a745; color: white; border: none;">
-        </form>
+    <div class="auth-section">
+        <h2>🔐 Authentication Status</h2>
+        {% if authenticated %}
+            <p class="success">✅ AUTHENTICATED - StockX API is ready to use</p>
+            {% if token_info %}
+                <div class="token-info">
+                    <strong>Token Information:</strong><br>
+                    Access Token: {{ token_info.access_token }}<br>
+                    Token Type: {{ token_info.token_type }}<br>
+                    Has Refresh Token: {{ token_info.has_refresh_token }}<br>
+                    Expires In: {{ token_info.expires_in }} seconds
+                </div>
+            {% endif %}
+        {% elif auth_in_progress %}
+            <p class="warning">⏳ Authentication in progress...</p>
+            <p>Complete the authentication in the browser window that opened.</p>
+        {% elif auth_error %}
+            <p class="error">❌ NOT AUTHENTICATED</p>
+            <p style="color: red;">Error: {{ auth_error }}</p>
+            <p><a href="/auth/start" class="auth-button">AUTHENTICATE NOW</a></p>
+        {% else %}
+            <p class="error">❌ NOT AUTHENTICATED</p>
+            <p><a href="/auth/start" class="auth-button">AUTHENTICATE NOW</a></p>
+        {% endif %}
         
-        <h4>📝 Or specify existing file</h4>
-        <form action="/run" method="post" style="margin: 10px 0;">
-            <input type="hidden" name="script" value="ebay">
-            <label for="ebay_file">CSV File (in ebay_tools/ directory):</label><br>
-            <input type="text" name="file" id="ebay_file" placeholder="example.csv" style="width: 300px; margin: 5px 0;"><br>
-            <input type="submit" value="Run eBay Price Analysis" style="padding: 5px 10px;">
+        <form action="/verify" method="post" style="margin: 10px 0;">
+            <input type="submit" value="Verify Authentication Status" style="padding: 5px 10px; background: #17a2b8; color: white; border: none;">
         </form>
-        <p><em>Compare eBay auction data with StockX prices</em></p>
     </div>
     
-    <h3>📊 Inventory Analysis</h3>
-    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9;">
-        <h4>📁 Upload CSV File</h4>
+    <div class="search-section">
+        <h2>🔍 Product Search</h2>
+        <p>Search for any shoe and get complete StockX information</p>
+        <form action="/search" method="post" style="margin: 10px 0;">
+            <label for="search_query">Enter shoe name (e.g., "Jordan 1 Chicago", "Nike Dunk Panda"):</label><br>
+            <input type="text" name="query" id="search_query" placeholder="Jordan 1 Chicago" required><br>
+            <input type="submit" value="Search StockX" class="search-button">
+        </form>
+    </div>
+    
+    <div class="upload-section">
+        <h2>📊 Bulk Analysis Tools</h2>
+        
+        <h3>💰 eBay Price Comparison</h3>
+        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+            <input type="hidden" name="script_type" value="ebay">
+            <label for="ebay_upload">Upload eBay CSV file:</label><br>
+            <input type="file" name="file" id="ebay_upload" accept=".csv" style="margin: 5px 0;"><br>
+            <input type="submit" value="Upload & Run eBay Analysis" class="upload-button">
+        </form>
+        <p><em>Compare eBay auction data with StockX prices</em></p>
+        
+        <h3>📈 Inventory Analysis</h3>
         <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
             <input type="hidden" name="script_type" value="inventory">
-            <label for="inventory_upload">Choose inventory CSV file from your computer:</label><br>
+            <label for="inventory_upload">Upload inventory CSV file:</label><br>
             <input type="file" name="file" id="inventory_upload" accept=".csv" style="margin: 5px 0;"><br>
-            <input type="submit" value="Upload & Run Inventory Analysis" style="padding: 5px 10px; background: #28a745; color: white; border: none;">
-        </form>
-        
-        <h4>📝 Or specify existing file</h4>
-        <form action="/run" method="post" style="margin: 10px 0;">
-            <input type="hidden" name="script" value="inventory">
-            <label for="inventory_file">CSV File (in pricing_tools/ directory):</label><br>
-            <input type="text" name="file" id="inventory_file" placeholder="inventory.csv" style="width: 300px; margin: 5px 0;"><br>
-            <input type="submit" value="Run Inventory Analysis" style="padding: 5px 10px;">
+            <input type="submit" value="Upload & Run Inventory Analysis" class="upload-button">
         </form>
         <p><em>Analyze inventory CSV against StockX market data</em></p>
     </div>
     
-    <h3>📁 Download Results</h3>
-    <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none;">View & Download Output Files</a></p>
-    <p><em>CSV outputs are saved to: uploads/, ebay_tools/, and pricing_tools/ directories</em></p>
+    <div class="results-section">
+        <h2>📁 Results & Downloads</h2>
+        <p><strong>Your processed files are saved in these locations:</strong></p>
+        <ul>
+            <li><strong>uploads/</strong> - Your uploaded files</li>
+            <li><strong>ebay_tools/</strong> - eBay analysis results</li>
+            <li><strong>pricing_tools/</strong> - Inventory analysis results</li>
+        </ul>
+        <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">View & Download All Results</a></p>
+        <p><em>⏱️ Processing can take several minutes. Your files remain available even if you close the browser.</em></p>
+    </div>
     
     <hr>
     
@@ -389,24 +416,20 @@ HTML_TEMPLATE = """
         <p>No scripts currently running</p>
     {% endif %}
     
-    <h2>📋 Recent Outputs</h2>
+    <h2>📋 Recent Activity</h2>
     <form action="/clear" method="post" style="margin: 10px 0;">
-        <input type="submit" value="Clear All Outputs" style="padding: 5px 10px;">
+        <input type="submit" value="Clear All Logs" style="padding: 5px 10px;">
     </form>
     
     {% for script_id, output in outputs %}
         <h3>{{ script_id }} - {{ output.timestamp }}</h3>
-        <pre style="background: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">{{ output.content }}</pre>
+        <pre>{{ output.content }}</pre>
         <hr>
     {% endfor %}
     
     {% if not outputs %}
-        <p>No script outputs yet</p>
+        <p>No recent activity</p>
     {% endif %}
-    
-    <script>
-        // Manual refresh only - no auto-refresh
-    </script>
 </body>
 </html>
 """
@@ -499,9 +522,25 @@ def start_auth():
 
 @app.route('/verify', methods=['POST'])
 def verify_auth():
-    """Verify authentication and show real API data"""
+    """Verify authentication and show token info"""
+    check_real_authentication()
+    return redirect(url_for('index'))
+
+@app.route('/search', methods=['POST'])
+def search_products():
+    """Search for products and display detailed info"""
+    if not check_real_authentication():
+        flash('❌ SEARCH BLOCKED: Authentication required. Please authenticate first.')
+        return redirect(url_for('index'))
+    
+    query = request.form.get('query', '').strip()
+    
+    if not query:
+        flash('Please enter a search query')
+        return redirect(url_for('index'))
+    
     try:
-        # Load token
+        # Load token for API call
         with open(TOKEN_FILE, 'r') as f:
             tokens = json.load(f)
         
@@ -510,11 +549,11 @@ def verify_auth():
             'x-api-key': STOCKX_API_KEY
         }
         
-        # Make real API call
+        # Search for products
         response = requests.get(
-            'https://api.stockx.com/v2/catalog/search?query=jordan&pageSize=3',
+            f'https://api.stockx.com/v2/catalog/search?query={query}&pageSize=5',
             headers=headers,
-            timeout=10
+            timeout=15
         )
         
         if response.status_code == 200:
@@ -522,19 +561,76 @@ def verify_auth():
             products = data.get('products', [])
             
             if products:
-                flash(f'✅ REAL API DATA VERIFIED - Found {data.get("count", 0)} Jordan products')
-                for i, product in enumerate(products[:3], 1):
-                    # Extract product name from title or use brand + model
-                    name = product.get('title') or product.get('name') or f"{product.get('brand', 'Unknown')} {product.get('model', 'Product')}"
-                    style = product.get('styleId') or product.get('style') or 'N/A'
-                    flash(f'{i}. {name} - Style: {style}')
+                flash(f'🔍 SEARCH RESULTS for "{query}" - Found {data.get("count", 0)} total products')
+                
+                for i, product in enumerate(products, 1):
+                    # Get basic product info
+                    title = product.get('title', 'Unknown Product')
+                    brand = product.get('brand', 'Unknown')
+                    style_id = product.get('styleId', 'N/A')
+                    product_type = product.get('productType', 'N/A')
+                    
+                    # Get product attributes
+                    attrs = product.get('productAttributes', {})
+                    gender = attrs.get('gender', 'N/A')
+                    release_date = attrs.get('releaseDate', 'N/A')
+                    retail_price = attrs.get('retailPrice', 'N/A')
+                    colorway = attrs.get('colorway', 'N/A')
+                    
+                    # Get size chart info
+                    size_chart = product.get('sizeChart', {})
+                    default_conversion = size_chart.get('defaultConversion', {})
+                    size_type = default_conversion.get('type', 'N/A') if default_conversion else 'N/A'
+                    
+                    # Get market eligibility
+                    flex_eligible = product.get('isFlexEligible', False)
+                    direct_eligible = product.get('isDirectEligible', False)
+                    
+                    # Format product info
+                    product_info = f"""
+{i}. {title}
+   Brand: {brand} | Style: {style_id} | Type: {product_type}
+   Gender: {gender} | Release: {release_date} | Retail: ${retail_price}
+   Colorway: {colorway}
+   Size Type: {size_type}
+   Flex Eligible: {flex_eligible} | Direct Eligible: {direct_eligible}
+   Product ID: {product.get('productId', 'N/A')}
+   URL Key: {product.get('urlKey', 'N/A')}
+"""
+                    flash(product_info)
+                    
+                    # Try to get market data for first product
+                    if i == 1:
+                        try:
+                            market_response = requests.get(
+                                f'https://api.stockx.com/v2/catalog/products/{product.get("productId")}/market-data',
+                                headers=headers,
+                                timeout=10
+                            )
+                            
+                            if market_response.status_code == 200:
+                                market_data = market_response.json()
+                                if market_data:
+                                    # Get first variant's market data
+                                    first_variant = market_data[0] if isinstance(market_data, list) and market_data else market_data
+                                    
+                                    lowest_ask = first_variant.get('lowestAskAmount', 'N/A')
+                                    highest_bid = first_variant.get('highestBidAmount', 'N/A')
+                                    currency = first_variant.get('currencyCode', 'USD')
+                                    
+                                    flash(f'💰 MARKET DATA for {title}:')
+                                    flash(f'   Lowest Ask: {lowest_ask} {currency}')
+                                    flash(f'   Highest Bid: {highest_bid} {currency}')
+                        except Exception as e:
+                            flash(f'⚠️ Could not fetch market data: {str(e)}')
+                    
             else:
-                flash('❌ API returned no products')
+                flash(f'❌ No products found for "{query}"')
         else:
-            flash(f'❌ API failed - Status: {response.status_code}')
+            flash(f'❌ Search failed - Status: {response.status_code}')
             
     except Exception as e:
-        flash(f'❌ Verification failed: {str(e)}')
+        flash(f'❌ Search error: {str(e)}')
     
     return redirect(url_for('index'))
 
@@ -566,7 +662,8 @@ def index():
         outputs=outputs,
         authenticated=auth_status,
         auth_in_progress=auth_state.get('auth_in_progress', False),
-        auth_error=auth_state.get('auth_error', None)
+        auth_error=auth_state.get('auth_error', None),
+        token_info=auth_state.get('token_info', None)
     )
 
 @app.route('/upload', methods=['POST'])
@@ -653,31 +750,44 @@ def list_downloads():
         <title>Download Files - StockX Tools</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background-color: #f2f2f2; }
+            .download-btn { background: #007bff; color: white; text-decoration: none; padding: 5px 10px; border-radius: 4px; }
+        </style>
     </head>
-    <body style="font-family: Arial; padding: 20px;">
+    <body>
         <h1>📁 Download Files</h1>
         <p><a href="/">← Back to main page</a></p>
         <hr>
         
+        <h2>📍 File Locations</h2>
+        <ul>
+            <li><strong>uploads/</strong> - Your uploaded CSV files</li>
+            <li><strong>ebay_tools/</strong> - eBay price comparison results</li>
+            <li><strong>pricing_tools/</strong> - Inventory analysis results</li>
+        </ul>
+        
         {% if files %}
             <h2>Available CSV Files</h2>
-            <table border="1" style="border-collapse: collapse; width: 100%;">
-                <tr style="background: #f0f0f0;">
-                    <th style="padding: 10px; text-align: left;">File Name</th>
-                    <th style="padding: 10px; text-align: left;">Directory</th>
-                    <th style="padding: 10px; text-align: left;">Size</th>
-                    <th style="padding: 10px; text-align: left;">Modified</th>
-                    <th style="padding: 10px; text-align: left;">Download</th>
+            <table>
+                <tr>
+                    <th>File Name</th>
+                    <th>Directory</th>
+                    <th>Size</th>
+                    <th>Modified</th>
+                    <th>Download</th>
                 </tr>
                 {% for file in files %}
                 <tr>
-                    <td style="padding: 10px;">{{ file.name }}</td>
-                    <td style="padding: 10px;">{{ file.path }}</td>
-                    <td style="padding: 10px;">{{ "%.1f"|format(file.size/1024) }} KB</td>
-                    <td style="padding: 10px;">{{ file.modified }}</td>
-                    <td style="padding: 10px;">
-                        <a href="/download/{{ file.path }}/{{ file.name }}" 
-                           style="padding: 5px 10px; background: #007cba; color: white; text-decoration: none;">
+                    <td>{{ file.name }}</td>
+                    <td>{{ file.path }}</td>
+                    <td>{{ "%.1f"|format(file.size/1024) }} KB</td>
+                    <td>{{ file.modified }}</td>
+                    <td>
+                        <a href="/download/{{ file.path }}/{{ file.name }}" class="download-btn">
                             Download
                         </a>
                     </td>
@@ -699,56 +809,6 @@ def download_file(directory, filename):
     except FileNotFoundError:
         flash('File not found')
         return redirect(url_for('list_downloads'))
-
-@app.route('/run', methods=['POST'])
-def run_script():
-    """Run selected script - REQUIRES REAL AUTHENTICATION"""
-    script = request.form.get('script')
-    file_param = request.form.get('file', '').strip()
-    
-    if not script:
-        return redirect(url_for('index'))
-    
-    # VERIFY REAL AUTHENTICATION BEFORE RUNNING ANY SCRIPT
-    if not check_real_authentication():
-        flash('❌ SCRIPT BLOCKED: Authentication required. Please authenticate first.')
-        return redirect(url_for('index'))
-    
-    # Generate script ID with timestamp
-    script_id = f"{script}_{datetime.now().strftime('%H%M%S')}"
-    
-    # Define script commands
-    if script == 'examples':
-        command = 'python3 example.py'
-        working_dir = None
-        
-    elif script == 'ebay':
-        if not file_param:
-            process_outputs[script_id] = ['❌ Error: Please specify a CSV file']
-            return redirect(url_for('index'))
-        command = f'python3 ebay_stockxpricing.py "{file_param}"'
-        working_dir = 'ebay_tools'
-        
-    elif script == 'inventory':
-        if not file_param:
-            process_outputs[script_id] = ['❌ Error: Please specify a CSV file']
-            return redirect(url_for('index'))
-        command = f'python3 inventory_stockx_analyzer.py "{file_param}"'
-        working_dir = 'pricing_tools'
-        
-    else:
-        process_outputs[script_id] = ['❌ Error: Unknown script']
-        return redirect(url_for('index'))
-    
-    # Start script in background thread
-    thread = threading.Thread(
-        target=run_script_async,
-        args=(script_id, command, working_dir)
-    )
-    thread.daemon = True
-    thread.start()
-    
-    return redirect(url_for('index'))
 
 @app.route('/clear', methods=['POST'])
 def clear_outputs():
