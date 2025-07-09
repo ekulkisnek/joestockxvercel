@@ -52,9 +52,13 @@ auth_state = {
 
 def get_replit_url():
     """Get the Replit app URL for OAuth callback"""
-    replit_url = os.getenv('REPLIT_URL')
-    if replit_url:
-        return replit_url.rstrip('/')
+    # Use the correct Replit domain
+    replit_domain = os.getenv('REPLIT_DEV_DOMAIN')
+    
+    if replit_domain:
+        return f'https://{replit_domain}'
+    
+    # Fallback for local development  
     return 'http://localhost:5000'
 
 def is_token_valid():
@@ -520,7 +524,10 @@ def verify_auth():
             if products:
                 flash(f'✅ REAL API DATA VERIFIED - Found {data.get("count", 0)} Jordan products')
                 for i, product in enumerate(products[:3], 1):
-                    flash(f'{i}. {product.get("name", "Unknown")} - Style: {product.get("styleId", "N/A")}')
+                    # Extract product name from title or use brand + model
+                    name = product.get('title') or product.get('name') or f"{product.get('brand', 'Unknown')} {product.get('model', 'Product')}"
+                    style = product.get('styleId') or product.get('style') or 'N/A'
+                    flash(f'{i}. {name} - Style: {style}')
             else:
                 flash('❌ API returned no products')
         else:
