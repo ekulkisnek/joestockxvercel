@@ -134,10 +134,7 @@ HTML_TEMPLATE = """
     {% endif %}
     
     <script>
-        // Auto-refresh every 5 seconds to show live updates
-        setTimeout(function() {
-            window.location.reload();
-        }, 5000);
+        // Manual refresh only - no auto-refresh
     </script>
 </body>
 </html>
@@ -239,7 +236,7 @@ def status():
 if __name__ == '__main__':
     print("🌐 Starting StockX Tools Web Interface...")
     print("📱 Access at: http://0.0.0.0:5000")
-    print("🔄 Page auto-refreshes every 5 seconds")
+    print("🔄 Refresh manually to see updates")
     print("=" * 50)
     
     app.run(host='0.0.0.0', port=5000, debug=False)
