@@ -1,7 +1,7 @@
 modules = ["python-3.11"]
 
 [workflows]
-runButton = "Project"
+runButton = "Web Interface"
 
 [[workflows.workflow]]
 name = "Run"
@@ -56,6 +56,15 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd pricing_tools && python3 inventory_stockx_analyzer.py"
+
+[[workflows.workflow]]
+name = "Web Interface"
+author = 29336191
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 app.py"
 
 [deployment]
 run = ["sh", "-c", "python3 oauth_callback.py"]
