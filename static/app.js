@@ -2,7 +2,9 @@ var socket;
 var isConnected = false;
 
 function initWebSocket() {
-    socket = io();
+    socket = io({
+        transports: ['websocket', 'polling']
+    });
     
     socket.on('connect', function() {
         console.log('WebSocket connected');
@@ -21,6 +23,23 @@ function initWebSocket() {
         setTimeout(function() {
             document.title = 'StockX Tools - Web Interface';
         }, 1000);
+        
+        // Check if this is a test message and create a special handler
+        if (data.script_id === 'websocket_test') {
+            console.log('Test message received, creating test container');
+            var testContainer = document.getElementById('test-output');
+            if (!testContainer) {
+                testContainer = document.createElement('div');
+                testContainer.id = 'test-output';
+                testContainer.innerHTML = '<h3>WebSocket Test Output</h3><pre style="background: #e8f5e8; padding: 10px; border: 1px solid #28a745;"></pre>';
+                document.body.appendChild(testContainer);
+            }
+            var testPre = testContainer.querySelector('pre');
+            if (testPre) {
+                testPre.textContent += data.line + '\n';
+            }
+        }
+        
         addOutputLine(data.script_id, data.line);
     });
     

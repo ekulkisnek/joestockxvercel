@@ -1079,6 +1079,15 @@ def debug_websocket():
     except FileNotFoundError:
         return "Debug file not found", 404
 
+@app.route('/simple_test')
+def simple_test():
+    """Simple WebSocket test page"""
+    try:
+        with open('simple_test.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Simple test file not found", 404
+
 @app.route('/test_websocket')
 def test_websocket():
     """Test WebSocket by sending a few messages"""

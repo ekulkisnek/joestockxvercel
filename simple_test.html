@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WebSocket Debug Test</title>
+    <title>Simple WebSocket Test</title>
 </head>
 <body>
-    <h1>WebSocket Debug Test</h1>
+    <h1>Simple WebSocket Test</h1>
     <div id="status">Connecting...</div>
     <div id="messages"></div>
+    <button onclick="testWebSocket()">Test WebSocket</button>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         const socket = io();
@@ -31,13 +32,17 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         });
         
-        socket.on('process_status', function(data) {
-            console.log('Received process_status:', data);
-            const msgDiv = document.createElement('div');
-            msgDiv.textContent = `STATUS: ${JSON.stringify(data)}`;
-            msgDiv.style.color = 'blue';
-            messagesDiv.appendChild(msgDiv);
-        });
+        function testWebSocket() {
+            fetch('/test_websocket')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Test started:', data);
+                    const msgDiv = document.createElement('div');
+                    msgDiv.textContent = 'Test started: ' + data.message;
+                    msgDiv.style.color = 'green';
+                    messagesDiv.appendChild(msgDiv);
+                });
+        }
     </script>
 </body>
 </html>
