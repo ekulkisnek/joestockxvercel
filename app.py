@@ -245,13 +245,18 @@ def run_script_async(script_id, command, working_dir=None):
         process_outputs[script_id].append(f"📁 Working directory: {os.getcwd()}")
         process_outputs[script_id].append("=" * 50)
         
+        # Use unbuffered output and set PYTHONUNBUFFERED for real-time progress
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+        
         process = subprocess.Popen(
             command,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
-            bufsize=1
+            bufsize=0,  # Unbuffered
+            env=env
         )
         
         running_processes[script_id] = process
@@ -315,7 +320,23 @@ HTML_TEMPLATE = """
         .auth-button { background: #dc3545; color: white; border: none; text-decoration: none; padding: 8px 15px; border-radius: 4px; }
         .search-button { background: #28a745; color: white; border: none; }
         .upload-button { background: #007bff; color: white; border: none; }
+        .auto-refresh { color: #6c757d; font-size: 12px; }
+        .running-indicator { color: #ffc107; font-weight: bold; }
+        .progress-indicator { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
     </style>
+    <script>
+        // Auto-refresh page every 3 seconds if there are running processes
+        {% if running_processes %}
+        setTimeout(function() {
+            window.location.reload();
+        }, 3000);
+        {% endif %}
+    </script>
 </head>
 <body>
     <h1>🤖 StockX Tools - Web Interface</h1>
@@ -410,7 +431,10 @@ HTML_TEMPLATE = """
     <h2>🔄 Running Processes</h2>
     {% if running_processes %}
         {% for script_id in running_processes %}
-            <p>⏳ {{ script_id }} is running...</p>
+            <div class="progress-indicator">
+                <p class="running-indicator">⏳ {{ script_id }} is running...</p>
+                <p class="auto-refresh">🔄 Page refreshes every 3 seconds to show progress</p>
+            </div>
         {% endfor %}
     {% else %}
         <p>No scripts currently running</p>

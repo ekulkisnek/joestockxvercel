@@ -18,6 +18,9 @@ from typing import List, Dict, Optional, Tuple
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Configure immediate output flushing for real-time web interface progress
+sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
+
 # Import our existing StockX client
 from smart_stockx_client import SmartStockXClient
 
@@ -406,12 +409,12 @@ class InventoryStockXAnalyzer:
             return False
 
         try:
-            print(f"🔍 Searching: '{search_query}' (Size: {size_normalized} {size_category})")
+            print(f"🔍 Searching: '{search_query}' (Size: {size_normalized} {size_category})", flush=True)
 
             search_results = self.client.search_products(search_query, page_size=10)
 
             if not search_results['products']:
-                print("   ❌ No products found")
+                print("   ❌ No products found", flush=True)
                 self.cache[cache_key] = None
                 return False
 
@@ -426,7 +429,7 @@ class InventoryStockXAnalyzer:
                 self.cache[cache_key] = None
                 return False
 
-            print(f"   ✅ Found: {best_product['title'][:50]}...")
+            print(f"   ✅ Found: {best_product['title'][:50]}...", flush=True)
 
             # Get variants for the product
             variants = self.get_product_variants(best_product['id'])
@@ -440,10 +443,10 @@ class InventoryStockXAnalyzer:
             matching_variant, is_uncertain = self.find_variant_by_size(variants, size_normalized, size_category)
 
             if not matching_variant:
-                print(f"   ❌ Size {size_normalized} not found")
+                print(f"   ❌ Size {size_normalized} not found", flush=True)
                 # Debug: show available sizes
                 available_sizes = [str(v.get('variantValue', '')) for v in variants[:10]]
-                print(f"   📏 Available sizes: {', '.join(available_sizes)}")
+                print(f"   📏 Available sizes: {', '.join(available_sizes)}", flush=True)
                 self.cache[cache_key] = None
                 return False
 
@@ -507,7 +510,7 @@ class InventoryStockXAnalyzer:
 
             self.cache[cache_key] = result
 
-            print(f"   💰 Bid: ${result['bid'] or 'N/A'} | Ask: ${result['ask'] or 'N/A'} | Size: {result['size']}")
+            print(f"   💰 Bid: ${result['bid'] or 'N/A'} | Ask: ${result['ask'] or 'N/A'} | Size: {result['size']}", flush=True)
             return True
 
         except Exception as e:
@@ -565,9 +568,9 @@ class InventoryStockXAnalyzer:
             input_path = Path(csv_file)
             output_file = input_path.parent / f"stockx_enhanced_{input_path.name}"
 
-        print(f"📊 Processing inventory: {csv_file}")
-        print(f"💾 Output will be saved to: {output_file}")
-        print("=" * 80)
+        print(f"📊 Processing inventory: {csv_file}", flush=True)
+        print(f"💾 Output will be saved to: {output_file}", flush=True)
+        print("=" * 80, flush=True)
 
         items = self.parse_csv_flexible(csv_file)
 
@@ -575,19 +578,20 @@ class InventoryStockXAnalyzer:
             print("❌ No inventory items found")
             return ""
 
-        print(f"\n🔍 Processing {len(items)} items...")
+        print(f"✅ Parsed {len(items)} inventory items", flush=True)
+        print(f"\n🔍 Processing {len(items)} items...", flush=True)
         
         # Calculate estimated time (2 seconds per item)
         estimated_seconds = len(items) * 2
         estimated_minutes = estimated_seconds / 60
-        print(f"⏱️  Estimated time: {estimated_minutes:.1f} minutes")
-        print(f"🔄 Processing at safe rate (30 items/minute) to avoid API limits")
-        print("=" * 80)
+        print(f"⏱️  Estimated time: {estimated_minutes:.1f} minutes", flush=True)
+        print(f"🔄 Processing at safe rate (30 items/minute) to avoid API limits", flush=True)
+        print("=" * 80, flush=True)
 
         start_time = time.time()
         
         for i, item in enumerate(items, 1):
-            print(f"\n[{i}/{len(items)}] {item.shoe_name} - Size {item.size}")
+            print(f"\n[{i}/{len(items)}] {item.shoe_name} - Size {item.size}", flush=True)
 
             success = self.search_stockx_for_item(item)
             if success:
@@ -605,16 +609,16 @@ class InventoryStockXAnalyzer:
                 remaining_time = (remaining_items * 2) / 60  # 2 seconds per item
                 
                 progress_percent = (i / len(items)) * 100
-                print(f"   📊 Progress: {i}/{len(items)} ({progress_percent:.1f}%) - {self.matches_found} matches found")
-                print(f"   ⏱️  Estimated time remaining: {remaining_time:.1f} minutes")
+                print(f"   📊 Progress: {i}/{len(items)} ({progress_percent:.1f}%) - {self.matches_found} matches found", flush=True)
+                print(f"   ⏱️  Estimated time remaining: {remaining_time:.1f} minutes", flush=True)
 
         self._write_enhanced_csv(items, output_file)
 
-        print(f"\n" + "=" * 80)
-        print(f"📊 PROCESSING COMPLETE!")
-        print(f"✅ Processed: {self.processed_count} items")
-        print(f"🎯 Found StockX matches: {self.matches_found} items")
-        print(f"💾 Enhanced CSV saved: {output_file}")
+        print(f"\n" + "=" * 80, flush=True)
+        print(f"📊 PROCESSING COMPLETE!", flush=True)
+        print(f"✅ Processed: {self.processed_count} items", flush=True)
+        print(f"🎯 Found StockX matches: {self.matches_found} items", flush=True)
+        print(f"💾 Enhanced CSV saved: {output_file}", flush=True)
 
         return output_file
 
