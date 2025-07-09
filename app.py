@@ -161,8 +161,20 @@ def ensure_authentication():
 def run_script_async(script_id, command, working_dir=None):
     """Run script asynchronously and capture output"""
     try:
-        if working_dir:
+        # Save current directory
+        original_dir = os.getcwd()
+        
+        # Change to working directory if specified
+        if working_dir and os.path.exists(working_dir):
             os.chdir(working_dir)
+        
+        # Initialize output tracking
+        if script_id not in process_outputs:
+            process_outputs[script_id] = []
+        
+        process_outputs[script_id].append(f"🚀 Executing: {command}")
+        process_outputs[script_id].append(f"📁 Working directory: {os.getcwd()}")
+        process_outputs[script_id].append("=" * 50)
         
         process = subprocess.Popen(
             command,
@@ -174,7 +186,6 @@ def run_script_async(script_id, command, working_dir=None):
         )
         
         running_processes[script_id] = process
-        process_outputs[script_id] = []
         
         # Read output line by line
         for line in iter(process.stdout.readline, ''):
@@ -186,18 +197,30 @@ def run_script_async(script_id, command, working_dir=None):
         
         # Add completion message
         if process.returncode == 0:
-            process_outputs[script_id].append(f"\n✅ Script completed successfully (exit code: {process.returncode})")
+            process_outputs[script_id].append("=" * 50)
+            process_outputs[script_id].append(f"✅ Script completed successfully (exit code: {process.returncode})")
         else:
-            process_outputs[script_id].append(f"\n❌ Script failed (exit code: {process.returncode})")
+            process_outputs[script_id].append("=" * 50)
+            process_outputs[script_id].append(f"❌ Script failed (exit code: {process.returncode})")
         
         # Remove from running processes
         if script_id in running_processes:
             del running_processes[script_id]
+        
+        # Restore original directory
+        os.chdir(original_dir)
             
     except Exception as e:
-        process_outputs[script_id] = [f"❌ Error running script: {str(e)}"]
+        if script_id not in process_outputs:
+            process_outputs[script_id] = []
+        process_outputs[script_id].append(f"❌ Error running script: {str(e)}")
         if script_id in running_processes:
             del running_processes[script_id]
+        # Restore original directory
+        try:
+            os.chdir(original_dir)
+        except:
+            pass
 
 # HTML template for the web interface
 HTML_TEMPLATE = """
@@ -447,12 +470,6 @@ def run_script():
     )
     thread.daemon = True
     thread.start()
-    
-    # Initialize output
-    process_outputs[script_id] = [f"🚀 Starting {script}...", f"Command: {command}"]
-    if working_dir:
-        process_outputs[script_id].append(f"Working directory: {working_dir}")
-    process_outputs[script_id].append("")
     
     return redirect(url_for('index'))
 

@@ -67,7 +67,8 @@ args = "python app.py"
 waitForPort = 5000
 
 [deployment]
-run = ["sh", "-c", "python3 oauth_callback.py"]
+run = ["sh", "-c", "python app.py"]
+deploymentTarget = "cloudrun"
 
 [nix]
 channel = "stable-24_05"
