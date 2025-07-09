@@ -431,31 +431,7 @@ HTML_TEMPLATE = """
         }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-    <script>
-        // Simple refresh every 3 seconds for now
-        setInterval(function() {
-            window.location.reload();
-        }, 3000);
-        
-        // Simple stop function
-        function stopProcess(scriptId) {
-            if (confirm('Stop process: ' + scriptId + '?')) {
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', '/stop_process/' + scriptId, true);
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            alert('Process stopped');
-                            window.location.reload();
-                        } else {
-                            alert('Failed to stop process');
-                        }
-                    }
-                };
-                xhr.send();
-            }
-        }
-    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </head>
 <body>
     <h1>🤖 StockX Tools - Web Interface</h1>
@@ -562,7 +538,7 @@ HTML_TEMPLATE = """
         {% else %}
             <p>No scripts currently running</p>
         {% endif %}
-        <p><small>Page refreshes every 3 seconds to show updates</small></p>
+        <p><small>Real-time streaming updates via WebSocket</small></p>
     </div>
     
     <div id="recent-activity">
