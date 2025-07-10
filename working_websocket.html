@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Working WebSocket Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        #output {
+            background: white;
+            border: 2px solid #333;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Working WebSocket Demo</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <button onclick="triggerTest()">Trigger WebSocket Test</button>
+    <button onclick="runInventory()">Run Inventory Analysis</button>
+    <button onclick="clearOutput()">Clear Output</button>
+    
+    <h2>Live Output:</h2>
+    <div id="output"></div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+        let socket;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function initSocket() {
+            log('Initializing WebSocket connection...');
+            
+            // Create socket connection
+            socket = io('/', {
+                transports: ['websocket', 'polling']
+            });
+            
+            // Connection events
+            socket.on('connect', () => {
+                log('✅ Connected to WebSocket');
+                status.className = 'status connected';
+                status.textContent = 'Connected';
+                
+                // Re-request output for any running processes
+                socket.emit('request_output', {});
+            });
+            
+            socket.on('disconnect', () => {
+                log('❌ Disconnected from WebSocket');
+                status.className = 'status disconnected';
+                status.textContent = 'Disconnected';
+            });
+            
+            // Listen for ALL events to debug
+            socket.onAny((event, ...args) => {
+                log(`🔍 Event: ${event} - ${JSON.stringify(args)}`);
+            });
+            
+            // Specific event handlers
+            socket.on('process_output', (data) => {
+                log(`📝 OUTPUT: ${data.line}`);
+            });
+            
+            socket.on('process_status', (data) => {
+                log(`📊 STATUS: ${data.process_count} processes running`);
+            });
+        }
+        
+        function triggerTest() {
+            log('🚀 Triggering WebSocket test...');
+            fetch('/test_websocket')
+                .then(r => r.json())
+                .then(data => log('Test response: ' + JSON.stringify(data)))
+                .catch(err => log('Error: ' + err));
+        }
+        
+        function runInventory() {
+            log('📦 Starting inventory analysis...');
+            const formData = new FormData();
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.text())
+            .then(html => {
+                log('Inventory analysis started');
+                // Extract script ID from response if needed
+            })
+            .catch(err => log('Error: ' + err));
+        }
+        
+        function clearOutput() {
+            output.textContent = '';
+            log('Output cleared');
+        }
+        
+        // Initialize on load
+        window.onload = () => {
+            initSocket();
+        };
+    </script>
+</body>
+</html>

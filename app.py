@@ -1205,6 +1205,38 @@ def stream_output(script_id):
     
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/working')
+def working():
+    """Working WebSocket demo page"""
+    try:
+        with open('working_websocket.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Working WebSocket file not found", 404
+
+@app.route('/simple')
+def simple():
+    """Simple polling interface"""
+    try:
+        with open('simple_polling.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Simple polling file not found", 404
+
+@app.route('/api/process_output/<script_id>')
+def api_process_output(script_id):
+    """API endpoint to get process output"""
+    if script_id in process_outputs:
+        return jsonify({
+            'lines': process_outputs[script_id],
+            'running': script_id in running_processes
+        })
+    else:
+        return jsonify({
+            'lines': [],
+            'running': False
+        })
+
 @app.route('/test_websocket')
 def test_websocket():
     """Test WebSocket by sending a few messages"""
