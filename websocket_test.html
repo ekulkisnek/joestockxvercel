@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>WebSocket Test</h1>
+    <div id="messages"></div>
+    <button onclick="startTest()">Start Test</button>
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        
+        function log(message) {
+            const p = document.createElement('p');
+            p.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            messagesDiv.appendChild(p);
+            console.log(message);
+        }
+        
+        const socket = io();
+        
+        socket.on('connect', function() {
+            log('Connected');
+        });
+        
+        socket.on('disconnect', function() {
+            log('Disconnected');
+        });
+        
+        socket.on('process_output', function(data) {
+            log('Received process_output: ' + JSON.stringify(data));
+        });
+        
+        socket.on('process_status', function(data) {
+            log('Received process_status: ' + JSON.stringify(data));
+        });
+        
+        function startTest() {
+            fetch('/test_websocket').then(response => response.json()).then(data => {
+                log('Test started: ' + data.message);
+            });
+        }
+    </script>
+</body>
+</html>

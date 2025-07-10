@@ -495,10 +495,12 @@ HTML_TEMPLATE = """
         });
         
         socket.on('process_output', function(data) {
-            console.log('📨 Received output:', data);
+            console.log('📨 PROCESS OUTPUT RECEIVED:', data);
             document.title = '* StockX Tools - New Output';
+            document.body.style.backgroundColor = '#f0f8ff';
             setTimeout(function() {
                 document.title = 'StockX Tools - Web Interface';
+                document.body.style.backgroundColor = '';
             }, 1000);
             
             // Find the output container
@@ -509,17 +511,42 @@ HTML_TEMPLATE = """
                     var existingContent = pre.textContent || '';
                     pre.textContent = existingContent + data.line + '\\n';
                     pre.scrollTop = pre.scrollHeight;
-                    console.log('✅ Added line to container');
+                    pre.style.borderLeft = '3px solid #28a745';
+                    setTimeout(function() {
+                        pre.style.borderLeft = '1px solid #ddd';
+                    }, 500);
+                    console.log('✅ Added line to container, new length:', pre.textContent.length);
                 } else {
                     console.log('❌ No pre element found');
                 }
             } else {
                 console.log('❌ No output container found for:', data.script_id);
+                
+                // Create emergency container if it doesn't exist
+                var recentActivity = document.getElementById('recent-activity');
+                if (!recentActivity) {
+                    // Create recent-activity div if it doesn't exist
+                    recentActivity = document.createElement('div');
+                    recentActivity.id = 'recent-activity';
+                    recentActivity.innerHTML = '<h2>📊 Recent Activity</h2>';
+                    document.body.appendChild(recentActivity);
+                    console.log('✅ Created recent-activity container');
+                }
+                
+                var emergencyDiv = document.createElement('div');
+                emergencyDiv.innerHTML = '<h3>' + data.script_id + ' (Live Stream)</h3><div id="output-' + data.script_id + '"><pre style="background: #f0f8ff; padding: 10px; border: 1px solid #0066cc; max-height: 300px; overflow-y: auto;">' + data.line + '\\n</pre></div>';
+                recentActivity.appendChild(emergencyDiv);
+                console.log('✅ Created emergency container for:', data.script_id);
             }
         });
         
         socket.on('process_status', function(data) {
             console.log('📊 Process status:', data);
+        });
+        
+        // Add event listener for ALL events to debug
+        socket.onAny(function(event, data) {
+            console.log('🔍 WebSocket event received:', event, data);
         });
         
         console.log('WebSocket initialization complete');
@@ -1143,6 +1170,15 @@ def debug_main():
             return f.read()
     except FileNotFoundError:
         return "Debug main file not found", 404
+
+@app.route('/websocket_test')
+def websocket_test():
+    """WebSocket test page"""
+    try:
+        with open('websocket_test.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "WebSocket test file not found", 404
 
 @app.route('/test_websocket')
 def test_websocket():
