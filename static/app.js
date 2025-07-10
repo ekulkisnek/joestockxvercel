@@ -78,11 +78,17 @@ function addOutputLine(scriptId, line) {
     
     var pre = outputContainer.querySelector('pre');
     if (pre) {
-        // Create a text node and append it to preserve formatting
-        var textNode = document.createTextNode(line + '\n');
-        pre.appendChild(textNode);
+        // Use textContent for better performance and avoid HTML escaping
+        var existingContent = pre.textContent || '';
+        pre.textContent = existingContent + line + '\n';
         pre.scrollTop = pre.scrollHeight;
-        console.log('Added line to existing pre via appendChild');
+        console.log('Added line to existing pre via textContent, new length:', pre.textContent.length);
+        
+        // Add visual feedback that content was added
+        pre.style.borderLeft = '4px solid #28a745';
+        setTimeout(function() {
+            pre.style.borderLeft = '1px solid #ddd';
+        }, 500);
     } else {
         console.log('Creating new pre element in container');
         var newPre = document.createElement('pre');
@@ -104,6 +110,13 @@ function createOutputContainer(scriptId) {
     console.log('Container found:', container);
     if (!container) {
         console.error('recent-activity container not found!');
+        return;
+    }
+    
+    // Check if container already exists (from server-side rendering)
+    var existingContainer = document.getElementById('output-' + scriptId);
+    if (existingContainer) {
+        console.log('Container already exists for:', scriptId);
         return;
     }
     
