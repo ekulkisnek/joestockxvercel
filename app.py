@@ -477,6 +477,53 @@ HTML_TEMPLATE = """
         }
     </style>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        // Initialize WebSocket immediately
+        console.log('Initializing WebSocket...');
+        var socket = io({
+            transports: ['websocket', 'polling']
+        });
+        
+        socket.on('connect', function() {
+            console.log('✅ WebSocket connected');
+            document.title = 'StockX Tools - Connected';
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('❌ WebSocket disconnected');
+            document.title = 'StockX Tools - Disconnected';
+        });
+        
+        socket.on('process_output', function(data) {
+            console.log('📨 Received output:', data);
+            document.title = '* StockX Tools - New Output';
+            setTimeout(function() {
+                document.title = 'StockX Tools - Web Interface';
+            }, 1000);
+            
+            // Find the output container
+            var outputContainer = document.getElementById('output-' + data.script_id);
+            if (outputContainer) {
+                var pre = outputContainer.querySelector('pre');
+                if (pre) {
+                    var existingContent = pre.textContent || '';
+                    pre.textContent = existingContent + data.line + '\\n';
+                    pre.scrollTop = pre.scrollHeight;
+                    console.log('✅ Added line to container');
+                } else {
+                    console.log('❌ No pre element found');
+                }
+            } else {
+                console.log('❌ No output container found for:', data.script_id);
+            }
+        });
+        
+        socket.on('process_status', function(data) {
+            console.log('📊 Process status:', data);
+        });
+        
+        console.log('WebSocket initialization complete');
+    </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </head>
 <body>
@@ -1087,6 +1134,15 @@ def simple_test():
             return f.read()
     except FileNotFoundError:
         return "Simple test file not found", 404
+
+@app.route('/debug_main')
+def debug_main():
+    """Debug main page WebSocket issues"""
+    try:
+        with open('debug_main.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Debug main file not found", 404
 
 @app.route('/test_websocket')
 def test_websocket():

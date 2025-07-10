@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Main Page WebSocket</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Debug Main Page WebSocket</h1>
+    <div id="status">Connecting...</div>
+    <div id="log"></div>
+    <script>
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+        
+        function log(message) {
+            const p = document.createElement('p');
+            p.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            logDiv.appendChild(p);
+            console.log(message);
+        }
+        
+        log('Starting WebSocket connection...');
+        
+        const socket = io({
+            transports: ['websocket', 'polling']
+        });
+        
+        socket.on('connect', function() {
+            log('WebSocket connected');
+            statusDiv.textContent = 'Connected';
+            statusDiv.style.color = 'green';
+        });
+        
+        socket.on('disconnect', function() {
+            log('WebSocket disconnected');
+            statusDiv.textContent = 'Disconnected';
+            statusDiv.style.color = 'red';
+        });
+        
+        socket.on('process_output', function(data) {
+            log('Received process_output: ' + JSON.stringify(data));
+        });
+        
+        socket.on('process_status', function(data) {
+            log('Received process_status: ' + JSON.stringify(data));
+        });
+        
+        socket.on('connect_error', function(error) {
+            log('Connection error: ' + error);
+        });
+        
+        socket.on('error', function(error) {
+            log('Socket error: ' + error);
+        });
+        
+        log('WebSocket initialization complete');
+    </script>
+</body>
+</html>
