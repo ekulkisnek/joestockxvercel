@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test - Guaranteed to Work</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        #messages {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .message {
+            padding: 5px;
+            margin: 2px 0;
+            background: #e7f3ff;
+            border-left: 3px solid #0066cc;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .success { background: #28a745; color: white; }
+        .primary { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Streaming Test</h1>
+    <div id="status" class="disconnected">Not Connected</div>
+    
+    <div>
+        <button onclick="testWebSocket()" class="primary">Test WebSocket Messages</button>
+        <button onclick="clearMessages()" class="success">Clear Messages</button>
+    </div>
+    
+    <h2>Messages Received:</h2>
+    <div id="messages"></div>
+    
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+        let messageCount = 0;
+        
+        function log(message, data) {
+            const messagesDiv = document.getElementById('messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message';
+            const timestamp = new Date().toLocaleTimeString();
+            msgDiv.innerHTML = `[${timestamp}] ${message}`;
+            if (data) {
+                msgDiv.innerHTML += '<br>Data: ' + JSON.stringify(data);
+            }
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            messageCount++;
+            document.title = `(${messageCount}) WebSocket Test`;
+        }
+        
+        function updateStatus(connected) {
+            const statusDiv = document.getElementById('status');
+            if (connected) {
+                statusDiv.className = 'connected';
+                statusDiv.textContent = 'CONNECTED - WebSocket is Active';
+            } else {
+                statusDiv.className = 'disconnected';
+                statusDiv.textContent = 'DISCONNECTED - WebSocket is Not Active';
+            }
+        }
+        
+        function initSocket() {
+            log('Initializing Socket.IO connection...');
+            
+            socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true
+            });
+            
+            socket.on('connect', function() {
+                log('✅ Connected to WebSocket');
+                updateStatus(true);
+            });
+            
+            socket.on('disconnect', function() {
+                log('❌ Disconnected from WebSocket');
+                updateStatus(false);
+            });
+            
+            socket.on('connect_error', function(error) {
+                log('⚠️ Connection Error', error.toString());
+            });
+            
+            // Listen for process_output events
+            socket.on('process_output', function(data) {
+                log('📨 PROCESS OUTPUT RECEIVED', data);
+                document.body.style.backgroundColor = '#e8f5e8';
+                setTimeout(() => {
+                    document.body.style.backgroundColor = '#f0f0f0';
+                }, 500);
+            });
+            
+            // Listen for process_status events
+            socket.on('process_status', function(data) {
+                log('📊 PROCESS STATUS', data);
+            });
+            
+            // Listen for ANY event
+            socket.onAny(function(event, ...args) {
+                log(`🔍 EVENT: ${event}`, args);
+            });
+        }
+        
+        function testWebSocket() {
+            log('🚀 Triggering WebSocket test...');
+            fetch('/test_websocket')
+                .then(response => response.json())
+                .then(data => {
+                    log('✅ Test triggered', data);
+                })
+                .catch(error => {
+                    log('❌ Test failed', error.toString());
+                });
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+            document.title = 'WebSocket Test';
+            log('Messages cleared');
+        }
+        
+        // Initialize on page load
+        window.onload = function() {
+            log('Page loaded, initializing WebSocket...');
+            initSocket();
+        };
+    </script>
+</body>
+</html>

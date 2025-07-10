@@ -1180,6 +1180,31 @@ def websocket_test():
     except FileNotFoundError:
         return "WebSocket test file not found", 404
 
+@app.route('/test_streaming')
+def test_streaming():
+    """New streaming test page"""
+    try:
+        with open('test_streaming.html', 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Test streaming file not found", 404
+
+@app.route('/stream/<script_id>')
+def stream_output(script_id):
+    """Stream output for a specific process using SSE"""
+    def generate():
+        if script_id in process_outputs:
+            # Send all existing output
+            for line in process_outputs[script_id]:
+                yield f"data: {json.dumps({'line': line, 'status': 'history'})}\n\n"
+        
+        # Send heartbeat every 30 seconds to keep connection alive
+        while script_id in running_processes:
+            yield f": heartbeat\n\n"
+            time.sleep(30)
+    
+    return Response(generate(), mimetype='text/event-stream')
+
 @app.route('/test_websocket')
 def test_websocket():
     """Test WebSocket by sending a few messages"""
