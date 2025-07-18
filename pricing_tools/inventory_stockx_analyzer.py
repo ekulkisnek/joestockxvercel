@@ -271,34 +271,90 @@ class InventoryStockXAnalyzer:
         return shoe_col, size_col, price_col, condition_col
 
     def parse_pasted_list(self, text: str) -> List[InventoryItem]:
-        """Parse pasted list format like 'Jordan 3 white cement 88 - size 11 ($460)'"""
+        """Parse pasted list format - handles both single line and multi-line formats"""
+        import re
         items = []
         
-        # Split by lines and clean up
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        # Clean the text
+        text = text.strip()
         
-        for line in lines:
-            # Skip header lines or empty lines
-            if not line or line.upper().startswith('SHOE LIST') or line.startswith('='):
+        # Remove header if present
+        text = re.sub(r'^SHOE LIST[^)]*\)', '', text, flags=re.IGNORECASE).strip()
+        
+        # Split into individual shoe entries
+        # Handle both multi-line and single-line formats
+        
+        # First, let's try splitting by lines (if they exist)
+        if '\n' in text and len(text.split('\n')) > 2:
+            # Multi-line format
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+        else:
+            # Single line format - split by price patterns
+            # Look for closing parenthesis followed by space and capital letter
+            lines = []
+            
+            # Simple approach: split on ") " followed by capital letter
+            parts = re.split(r'\)\s+(?=[A-Z])', text)
+            
+            for i, part in enumerate(parts):
+                if part.strip():
+                    # Add back the closing parenthesis except for the last part
+                    if i < len(parts) - 1:
+                        lines.append(part.strip() + ')')
+                    else:
+                        lines.append(part.strip())
+            
+            # If that didn't work well, try a different approach
+            if len(lines) < 3:
+                # More aggressive pattern: look for price patterns
+                # Split on patterns like "($XXX) Some Brand"
+                pattern = r'\(\$?\d+(?:\.\d{2})?\)\s*(?=[A-Z][a-z])'
+                parts = re.split(pattern, text)
+                
+                # Find the prices that were split out
+                prices = re.findall(r'\(\$?\d+(?:\.\d{2})?\)', text)
+                
+                lines = []
+                for i, part in enumerate(parts):
+                    if part.strip():
+                        if i < len(prices):
+                            lines.append(part.strip() + ' ' + prices[i])
+                        else:
+                            lines.append(part.strip())
+        
+        print(f"📋 Split into {len(lines)} potential shoe entries")
+        
+        for i, line in enumerate(lines):
+            if not line or len(line) < 10:  # Skip very short lines
                 continue
             
-            # Parse each line using regex
-            # Pattern: shoe_name - size size_info (price) [optional notes]
-            import re
+            # Skip header lines
+            if any(skip in line.upper() for skip in ['SHOE LIST', 'TAKE ALL ONLY']):
+                continue
             
-            # First try to find the price in parentheses
+            print(f"   Processing line {i+1}: {line[:60]}...")
+            
+            # Parse each line using regex
+            
+            # Find the price in parentheses - should be at the end
             price_match = re.search(r'\(\$?(\d+(?:\.\d{2})?)\)', line)
             price = price_match.group(1) if price_match else ""
             
-            # Remove price and any notes after it
+            if not price:
+                print(f"   ⚠️ No price found in: {line[:50]}...")
+                continue
+            
+            # Remove price and any notes after it from the end
             line_without_price = re.sub(r'\(\$?\d+(?:\.\d{2})?\).*$', '', line).strip()
+            # Also clean up any trailing price patterns that got left behind
+            line_without_price = re.sub(r'\$\d+\).*$', '', line_without_price).strip()
             
             # Find size information - look for "size" or "- size"
             size_pattern = r'(?:-\s*)?size\s+(.*?)(?:\s*\(|$)'
             size_match = re.search(size_pattern, line_without_price, re.IGNORECASE)
             
             if not size_match:
-                print(f"⚠️ Could not parse size from: {line}")
+                print(f"   ⚠️ Could not parse size from: {line_without_price[:50]}...")
                 continue
                 
             size_info = size_match.group(1).strip()
@@ -307,6 +363,12 @@ class InventoryStockXAnalyzer:
             shoe_name = re.sub(size_pattern, '', line_without_price, flags=re.IGNORECASE).strip()
             # Clean up trailing dashes or spaces
             shoe_name = re.sub(r'\s*-\s*$', '', shoe_name).strip()
+            
+            if not shoe_name:
+                print(f"   ⚠️ No shoe name found in: {line[:50]}...")
+                continue
+            
+            print(f"   ✅ Parsed: '{shoe_name}' - size {size_info} - ${price}")
             
             # Parse sizes - handle complex formats like "11.5x2, 12" or "4.5x13, 5x9, 5.5x4"
             sizes = self._parse_size_list(size_info)
@@ -320,23 +382,15 @@ class InventoryStockXAnalyzer:
                 elif "vnds" in line.lower():
                     condition = "Very Near Deadstock"
                 
-                item = InventoryItem(
-                    shoe_name=shoe_name,
-                    size=size,
-                    price=price,
-                    condition=condition
-                )
-                items.append(item)
-                
-                # If quantity > 1, add multiple entries
-                for _ in range(quantity - 1):
-                    duplicate_item = InventoryItem(
+                # Create the specified quantity of items
+                for _ in range(quantity):
+                    item = InventoryItem(
                         shoe_name=shoe_name,
                         size=size,
                         price=price,
                         condition=condition
                     )
-                    items.append(duplicate_item)
+                    items.append(item)
         
         return items
     
@@ -813,7 +867,17 @@ class InventoryStockXAnalyzer:
         try:
             print(f"🔍 Searching: '{search_query}' (Size: {size_normalized} {size_category})", flush=True)
 
-            search_results = self.client.search_products(search_query, page_size=10)
+            # Ensure authentication before search (in case it failed during init)
+            try:
+                search_results = self.client.search_products(search_query, page_size=10)
+            except Exception as auth_error:
+                if "tokens_full_scope.json" in str(auth_error) or "No such file" in str(auth_error):
+                    print(f"   🔄 Authentication issue detected, retrying setup...")
+                    self._setup_authentication()
+                    # Retry the search after auth setup
+                    search_results = self.client.search_products(search_query, page_size=10)
+                else:
+                    raise auth_error
 
             if not search_results['products']:
                 print("   ❌ No products found", flush=True)
