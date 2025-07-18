@@ -62,6 +62,32 @@ class InventoryStockXAnalyzer:
         self.processed_count = 0
         self.matches_found = 0
         self.cache = {}
+
+    def _convert_date_to_days_ago(self, date_string: str) -> str:
+        """Convert ISO date string to 'X days ago' format"""
+        if not date_string:
+            return ""
+        
+        try:
+            # Parse the ISO date string (e.g. "2025-07-18T17:37:53.102Z")
+            if date_string.endswith('Z'):
+                date_obj = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+            else:
+                date_obj = datetime.fromisoformat(date_string)
+            
+            # Calculate days difference from today
+            today = datetime.now(date_obj.tzinfo) if date_obj.tzinfo else datetime.now()
+            days_diff = (today - date_obj).days
+            
+            if days_diff == 0:
+                return "today"
+            elif days_diff == 1:
+                return "1 day ago"
+            else:
+                return f"{days_diff} days ago"
+                
+        except (ValueError, TypeError):
+            return ""
         
         # Set correct token file path - check if we're in pricing_tools directory
         if os.path.basename(os.getcwd()) == 'pricing_tools':
@@ -370,44 +396,63 @@ class InventoryStockXAnalyzer:
         if ' - ' in size_clean:
             size_clean = size_clean.split(' - ')[0].strip()
 
-        # Handle different size formats
-        if size_clean.endswith('Y'):
-            return size_clean, "gs"  # Grade School
-        elif size_clean.endswith('C'):
-            return size_clean, "ps"  # Preschool
-        elif size_clean.endswith('W') or size_clean.startswith('W'):
+        # Handle different size formats with better recognition
+        # Youth/Grade School sizes: Y, y (case insensitive)
+        if size_clean.endswith('Y') or re.match(r'^\d+\.?\d*Y$', size_clean):
+            numeric_size = re.sub(r'[Y]', '', size_clean)
+            return f"{numeric_size}Y", "gs"  # Grade School
+        
+        # Preschool sizes: C, c (case insensitive) 
+        elif size_clean.endswith('C') or re.match(r'^\d+\.?\d*C$', size_clean):
+            numeric_size = re.sub(r'[C]', '', size_clean)
+            return f"{numeric_size}C", "ps"  # Preschool
+        
+        # Women's sizes: W, w (case insensitive) - can be prefix or suffix
+        elif (size_clean.endswith('W') or size_clean.startswith('W') or 
+              re.match(r'^\d+\.?\d*W$', size_clean)):
             numeric_size = re.sub(r'[WM]', '', size_clean)
-            return numeric_size, "women"
+            return f"{numeric_size}W", "women"
+        
+        # Men's sizes: M prefix or just numeric
         elif size_clean.startswith('M'):
             numeric_size = re.sub(r'[WM]', '', size_clean)
             return numeric_size, "men"
+        
+        # Default to men's if just numeric
         else:
             return size_clean, "men"
 
     def clean_shoe_name_for_search(self, shoe_name: str) -> str:
-        """Clean shoe name for StockX search"""
+        """Clean shoe name for StockX search while preserving important details"""
         cleaned = shoe_name.strip()
 
-        suffixes_to_remove = [
-            r'\s*\([^)]*\)$',
-            r'\s*-\s*[A-Z0-9]+$',
+        # Only remove generic condition/quality notes, preserve important details
+        patterns_to_remove = [
+            r'\s*\(slight markings[^)]*\)$',  # Remove condition notes
+            r'\s*\(no box\)$',                # Remove packaging notes
+            r'\s*\(VNDS\)$',                  # Remove condition abbreviations
+            r'\s*\(DS\)$',                    # Remove deadstock notes
+            r'\s*\(GS\)$',                    # Keep GS but consider removing if no match
         ]
 
-        for suffix in suffixes_to_remove:
-            cleaned = re.sub(suffix, '', cleaned)
+        for pattern in patterns_to_remove:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
 
+        # Preserve important details like years, "without laces", etc.
+        # Only clean up excessive spacing and normalize some terms
         replacements = {
-            'OG': '',
-            'RETRO': '',
-            '1 85': '1',
+            'RETRO HIGH': 'High',     # Normalize retro terms
+            'RETRO LOW': 'Low',       # Normalize retro terms  
+            '1 85': '1',              # Fix spacing issues
         }
 
         for old, new in replacements.items():
             cleaned = cleaned.replace(old, new)
 
+        # Clean up spacing but preserve all meaningful words
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
-        return cleaned[:60]
+        return cleaned[:80]  # Increased length to preserve more details
 
     def get_product_variants(self, product_id: str) -> List[Dict]:
         """Get all variants for a product"""
@@ -539,11 +584,14 @@ class InventoryStockXAnalyzer:
                 return None
             
             catalog_id = catalog_items[0].get('catalog_id')
+            alias_sku = catalog_items[0].get('style_id', '')  # Get SKU from Alias
             if not catalog_id:
                 print(f"   ❌ No catalog ID found")
                 return None
             
             print(f"   ✅ Found Alias match: {catalog_items[0].get('name', 'Unknown')}")
+            if alias_sku:
+                print(f"   📋 Alias SKU: {alias_sku}")
             
             # Step 2: Get pricing data with all the requested parameters
             params = {
@@ -628,6 +676,9 @@ class InventoryStockXAnalyzer:
                 # Last consigned
                 'last_consigned_price': cents_to_dollars(last_consigned.get('price_cents')),
                 'last_consigned_date': last_consigned.get('purchased_at'),
+                
+                # Include SKU for verification
+                'alias_sku': alias_sku,
             }
             
             print(f"   💰 Alias data: Ship ${result['ship_to_verify_price'] or 'N/A'} | Consigned ${result['consignment_price'] or 'N/A'}")
@@ -659,7 +710,7 @@ class InventoryStockXAnalyzer:
                     item.last_consigned_price = f"${cached_result['last_consigned_price']:.2f}"
                 else:
                     item.last_consigned_price = None
-                item.last_consigned_date = cached_result.get('last_consigned_date')
+                item.last_consigned_date = self._convert_date_to_days_ago(cached_result.get('last_consigned_date'))
                 if cached_result.get('lowest_with_you'):
                     item.lowest_with_you = f"${cached_result['lowest_with_you']:.2f}"
                 else:
@@ -668,7 +719,7 @@ class InventoryStockXAnalyzer:
                     item.last_with_you_price = f"${cached_result['last_with_you_price']:.2f}"
                 else:
                     item.last_with_you_price = None
-                item.last_with_you_date = cached_result.get('last_with_you_date')
+                item.last_with_you_date = self._convert_date_to_days_ago(cached_result.get('last_with_you_date'))
                 if cached_result.get('consignment_price'):
                     item.consignment_price = f"${cached_result['consignment_price']:.2f}"
                 else:
@@ -734,10 +785,11 @@ class InventoryStockXAnalyzer:
             print(f"   🎯 Found variant: {variant_size} (ID: {variant_id[:8]}...)")
 
             # Get market data for the specific variant
+            print(f"   📊 Getting StockX market data...", flush=True)
             market_data = self.get_variant_market_data(best_product['id'], variant_id)
 
             if not market_data:
-                print("   ❌ No market data available")
+                print("   ❌ No StockX market data available")
                 self.cache[cache_key] = None
                 return False
              
@@ -794,10 +846,10 @@ class InventoryStockXAnalyzer:
             if alias_data:
                 item.lowest_consigned = f"${alias_data['lowest_consigned']:.2f}" if alias_data.get('lowest_consigned') else None
                 item.last_consigned_price = f"${alias_data['last_consigned_price']:.2f}" if alias_data.get('last_consigned_price') else None
-                item.last_consigned_date = alias_data.get('last_consigned_date')
+                item.last_consigned_date = self._convert_date_to_days_ago(alias_data.get('last_consigned_date'))
                 item.lowest_with_you = f"${alias_data['lowest_with_you']:.2f}" if alias_data.get('lowest_with_you') else None
                 item.last_with_you_price = f"${alias_data['last_with_you_price']:.2f}" if alias_data.get('last_with_you_price') else None
-                item.last_with_you_date = alias_data.get('last_with_you_date')
+                item.last_with_you_date = self._convert_date_to_days_ago(alias_data.get('last_with_you_date'))
                 item.consignment_price = f"${alias_data['consignment_price']:.2f}" if alias_data.get('consignment_price') else None
                 item.ship_to_verify_price = f"${alias_data['ship_to_verify_price']:.2f}" if alias_data.get('ship_to_verify_price') else None
             else:
@@ -818,9 +870,23 @@ class InventoryStockXAnalyzer:
 
             self.cache[cache_key] = result
 
+            print(f"   ✅ StockX Data Retrieved:", flush=True)
             print(f"   💰 Bid: ${result['bid'] or 'N/A'} | Ask: ${result['ask'] or 'N/A'} | Size: {result['size']}", flush=True)
+            print(f"   📋 SKU: {result['sku']} | Shoe: {result['shoe_name'][:40]}...", flush=True)
             if alias_data:
-                print(f"   📦 Alias: Ship ${alias_data['ship_to_verify_price'] or 'N/A'} | Consigned ${alias_data['consignment_price'] or 'N/A'}", flush=True)
+                print(f"   ✅ Alias Data Retrieved:", flush=True)
+                print(f"   📦 Ship: ${alias_data['ship_to_verify_price'] or 'N/A'} | Consigned: ${alias_data['consignment_price'] or 'N/A'}", flush=True)
+                
+                # SKU verification
+                stockx_sku = result['sku']
+                alias_sku = alias_data.get('alias_sku', '')
+                if stockx_sku and alias_sku:
+                    if stockx_sku.upper() == alias_sku.upper():
+                        print(f"   ✅ SKU Match Verified: {stockx_sku}", flush=True)
+                    else:
+                        print(f"   ⚠️  SKU Mismatch: StockX({stockx_sku}) vs Alias({alias_sku})", flush=True)
+                elif not alias_sku:
+                    print(f"   ⚠️  No Alias SKU available for verification", flush=True)
             return True
 
         except Exception as e:
@@ -989,15 +1055,12 @@ class InventoryStockXAnalyzer:
         return output_file
 
     def _write_enhanced_csv(self, items: List[InventoryItem], output_file: str):
-        """Write enhanced CSV with reordered columns including Alias pricing data"""
-        # Column order: basic info, then bid/ask prices, then Alias data, then everything else  
+        """Write enhanced CSV with exact requested column order"""
+        # Exact column order as requested by user
         all_columns = [
-            'original_shoe_name', 'original_size', 'original_price', 'condition',
-            'stockx_bid', 'stockx_ask',
-            'bid_profit', 'ask_profit',
+            'original_shoe_name', 'original_size', 'stockx_bid', 'stockx_ask',
             'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
-            'consignment_price', 'ship_to_verify_price',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
 
@@ -1009,10 +1072,6 @@ class InventoryStockXAnalyzer:
                 row = {
                     'original_shoe_name': item.shoe_name,
                     'original_size': item.size,
-                    'original_price': item.price,
-                    'condition': item.condition,
-                    'bid_profit': item.bid_profit or '',
-                    'ask_profit': item.ask_profit or '',
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
                     'lowest_consigned': item.lowest_consigned or '',
@@ -1021,8 +1080,6 @@ class InventoryStockXAnalyzer:
                     'lowest_with_you': item.lowest_with_you or '',
                     'last_with_you_price': item.last_with_you_price or '',
                     'last_with_you_date': item.last_with_you_date or '',
-                    'consignment_price': item.consignment_price or '',
-                    'ship_to_verify_price': item.ship_to_verify_price or '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',

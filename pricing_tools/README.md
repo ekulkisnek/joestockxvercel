@@ -59,20 +59,17 @@ Features:
 
 ## Output
 
-Enhanced CSV with columns:
-1. `original_shoe_name`, `original_size`, `original_price`, `condition`
-2. `stockx_bid`, `stockx_ask` (current market prices)
-3. `bid_profit`, `ask_profit` (profit calculations)
-4. **Alias Pricing Data:**
+Enhanced CSV with exact column order:
+1. `original_shoe_name`, `original_size` - Your original data
+2. `stockx_bid`, `stockx_ask` - Current StockX market prices
+3. **Alias Pricing Data:**
    - `lowest_consigned` - Lowest consigned price
    - `last_consigned_price` - Most recent consigned sale price
-   - `last_consigned_date` - Date of last consigned sale
+   - `last_consigned_date` - Days since last consigned sale (e.g., "5 days ago")
    - `lowest_with_you` - Overall lowest price available
    - `last_with_you_price` - Most recent sale price
-   - `last_with_you_date` - Date of last sale
-   - `consignment_price` - Consignment-only pricing
-   - `ship_to_verify_price` - Ship to verify pricing
-5. `stockx_sku`, `stockx_url`, `stockx_size`, `stockx_shoe_name` (StockX details)
+   - `last_with_you_date` - Days since last sale (e.g., "3 days ago")
+4. `stockx_sku`, `stockx_url`, `stockx_size`, `stockx_shoe_name` - StockX details
 
 ## Alias Pricing Data
 
@@ -84,12 +81,42 @@ Integrates with Alias API to provide comprehensive pricing insights:
 - **Last Sales Data**: Most recent sale prices and dates (overall and consigned)
 - **Date Information**: When items were last sold for pricing trends
 
+## Enhanced Features (Latest Updates)
+
+### 🔍 **Improved Size Recognition**
+- **Women's sizes**: `6w`, `6W`, `W6` all correctly recognized as women's size 6
+- **Youth sizes**: `7y`, `7Y`, `Y7` all correctly recognized as youth/GS size 7  
+- **Child sizes**: `5c`, `5C`, `C5` all correctly recognized as child/PS size 5
+- **Better parsing**: No more failed size matches due to case sensitivity
+
+### 👟 **Smarter Shoe Name Matching**
+- **Preserves important details**: Years (2016), special notes (without laces), colorways
+- **Only removes condition notes**: Removes (DS), (VNDS), (no box) but keeps meaningful details
+- **Better accuracy**: More precise matches by considering all descriptive words
+
+### 📊 **Enhanced Logging & Progress**
+- **Detailed StockX progress**: Shows search → match → variant → market data retrieval
+- **SKU verification**: Compares StockX and Alias SKUs to verify same shoe
+- **Size category display**: Shows men/women/youth categorization
+- **Clear error messages**: Better debugging information
+
+### 🗓️ **User-Friendly Dates**
+- **Days ago format**: "3 days ago" instead of "2025-01-15T12:34:56Z"
+- **Natural language**: "today", "1 day ago", "15 days ago"
+- **Easy interpretation**: Quick understanding of sale recency
+
+### 🎯 **SKU Cross-Verification**
+- **Dual API verification**: Ensures StockX and Alias refer to same shoe
+- **Mismatch detection**: Warns when SKUs don't match between platforms
+- **Confidence boost**: Higher accuracy through SKU validation
+
 ## Size Matching
 
 Automatically handles:
 - Standard US men's sizes (8, 8.5, 9, etc.)
-- Youth sizes (Y6, Y7, etc.)
-- Women's sizes (W8, W8.5, etc.)
+- Youth sizes (Y6, Y7, etc.) - **Enhanced recognition**
+- Women's sizes (W8, W8.5, etc.) - **Enhanced recognition**  
+- Child sizes (C5, C6, etc.) - **Enhanced recognition**
 - International sizes (UK, EU when available)
 
 ## Performance
