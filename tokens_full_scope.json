@@ -4,5 +4,6 @@
   "scope": "openid offline_access",
   "expires_in": 43200,
   "token_type": "Bearer",
-  "refresh_token": "FKwIytPO6TI1VETAu8wsZHYaQ4YIGPRvcB04Op8Mcio6r"
+  "refresh_token": "FKwIytPO6TI1VETAu8wsZHYaQ4YIGPRvcB04Op8Mcio6r",
+  "refreshed_at": 1752855016.9285755
 }
