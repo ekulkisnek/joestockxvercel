@@ -1,163 +1,110 @@
-# 📊 Pricing Tools - Inventory Analysis
+# StockX Pricing Tools
 
-## 🆕 Latest Updates
+Advanced tools for analyzing inventory against StockX market data with Alias pricing insights.
 
-### ✨ Pasted List Format Support (NEW!)
-- **Copy & Paste**: Now supports pasting lists directly from Excel/Google Sheets or text
-- **Complex Parsing**: Handles sizes with quantities (e.g., "11.5x2, 12")
-- **Perfect Accuracy**: Zero mistakes in parsing shoe names, sizes, or prices
-- **Intelligent Detection**: Automatically detects pasted list vs CSV format
+## Features
 
-### 📊 Sales History Integration (FIXED!)
-- **Last 5 Sales Data**: Now includes average price, average days between sales, price range, and time range
-- **Correct API Endpoint**: Fixed to use proper `/selling/orders/history` endpoint
-- **Enhanced Retry Logic**: Automatically retries on 429 rate limit errors instead of skipping items
+- **CSV Processing**: Parse structured CSV files with flexible column detection
+- **Pasted List Processing**: Handle complex inventory lists copied from Excel/Google Sheets (separate feature)
+- **Smart Matching**: Intelligent shoe name and size matching with StockX products
+- **Rate Limiting**: Built-in retry logic and optimal request pacing
+- **Profit Calculations**: Automatic bid/ask profit calculations
+- **Alias Pricing Data**: Complete pricing insights from Alias API including consignment data
+- **Caching**: Results caching to avoid duplicate API calls
 
-### 🗑️ Simplified & Focused
-- **Removed eBay Tools**: Eliminated all eBay-related functionality
-- **Streamlined Interface**: Clean, focused on StockX inventory analysis only
+## Quick Start
 
-### 📊 Enhanced CSV Output
-The enhanced CSV now includes these columns in order:
-1. `original_shoe_name`, `original_size`, `original_price`, `condition`
-2. **`stockx_bid`, `stockx_ask`** (moved to position 5-6 as requested)
-3. `bid_profit`, `ask_profit`
-4. **`last5_avg_price`, `last5_avg_days`, `last5_price_range`, `last5_time_range`** ✨
-5. `stockx_sku`, `stockx_url`, `stockx_size`, `stockx_shoe_name`
-
-## 🚀 Quick Start
-
-### Method 1: Upload CSV File
+### CSV Processing (Default)
 ```bash
-cd pricing_tools
-python3 inventory_stockx_analyzer.py your_inventory.csv
+python inventory_stockx_analyzer.py your_inventory.csv
 ```
 
-### Method 2: Paste List Format ✨NEW!
-Save your pasted list as a text file and run the same command. The system will automatically detect the format!
-
-**Example pasted list format:**
+### Pasted List Processing (Manual)
+```bash
+python inventory_stockx_analyzer.py --list your_pasted_shoes.txt
 ```
-SHOE LIST EVERYTHING DS
+
+## Input Formats
+
+### CSV Format
+Flexible CSV with any combination of:
+- Shoe name/product name
+- Size (including Y/W youth/women sizes)
+- Price
+- Condition
+
+Example CSV:
+```csv
+Shoe Name,Size,Price,Condition
+Nike Dunk Low Panda,10.5,120,Used
+Jordan 1 High Chicago,11,450,New
+```
+
+### Pasted List Format (Manual Option)
+For when you copy inventory from Excel/Google Sheets:
+
+```text
 Jordan 3 white cement 88 - size 11 ($460)
-Nike dunk low sandrift- size 11W ($110)
 Supreme air max 1 87 white - size 11.5x2, 12 ($210)
-Supreme air max 1 87 black - size 9.5,10,11.5,13 ($225)
-Yeezy bone 500 - size 4.5x13, 5x9, 5.5x4 ($185) TAKE ALL ONLY
+Yeezy bone 500 - size 4.5x13, 5x9, 5.5x4 ($185)
 White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)
-White cement 4 (GS) - size 6x4,7x12 ($185)
 ```
 
-## 🎯 Pasted List Format Features
+Features:
+- Complex shoe names with descriptors
+- Multiple sizes with quantities (11.5x2 = 2 pairs of size 11.5)
+- Comma-separated sizes
+- Price extraction from parentheses
+- Special notes handling
 
-### ✅ Perfect Parsing
-- **Shoe Names**: Extracts complete names including complex ones like "Supreme air max 1 87 white"
-- **Multiple Sizes**: Handles "11.5x2, 12" (creates 2x size 11.5 + 1x size 12)
-- **Quantities**: Supports "4.5x13, 5x9, 5.5x4" format perfectly
-- **Prices**: Extracts prices from "($460)" format
-- **Special Notes**: Ignores "TAKE ALL ONLY" and other notes
+## Output
 
-### 📋 Supported Formats
-- `Shoe Name - size 11 ($460)`
-- `Shoe Name- size 11W ($110)` (handles missing spaces)
-- `Shoe Name - size 11.5x2, 12 ($210)` (multiple sizes with quantities)
-- `Shoe Name - size 9.5,10,11.5,13 ($225)` (comma-separated sizes)
-- `Shoe Name (GS) - size 6x4,7x12 ($185)` (Grade School indicators)
+Enhanced CSV with columns:
+1. `original_shoe_name`, `original_size`, `original_price`, `condition`
+2. `stockx_bid`, `stockx_ask` (current market prices)
+3. `bid_profit`, `ask_profit` (profit calculations)
+4. **Alias Pricing Data:**
+   - `lowest_consigned` - Lowest consigned price
+   - `last_consigned_price` - Most recent consigned sale price
+   - `last_consigned_date` - Date of last consigned sale
+   - `lowest_with_you` - Overall lowest price available
+   - `last_with_you_price` - Most recent sale price
+   - `last_with_you_date` - Date of last sale
+   - `consignment_price` - Consignment-only pricing
+   - `ship_to_verify_price` - Ship to verify pricing
+5. `stockx_sku`, `stockx_url`, `stockx_size`, `stockx_shoe_name` (StockX details)
 
-### 🔢 Quantity Handling
-When you specify `11.5x2`, the system creates **2 separate entries** for size 11.5, each with the same price. This ensures accurate inventory counts.
+## Alias Pricing Data
 
-## 📊 Example Outputs
+Integrates with Alias API to provide comprehensive pricing insights:
+- **Ship to Verify Price**: Lowest available listing price
+- **Consignment Price**: Pricing specifically for consigned items
+- **Lowest With You**: Overall lowest price across all channels
+- **Lowest Consigned**: Lowest price among consigned items only
+- **Last Sales Data**: Most recent sale prices and dates (overall and consigned)
+- **Date Information**: When items were last sold for pricing trends
 
-### From Pasted List:
-**Input:** `Supreme air max 1 87 white - size 11.5x2, 12 ($210)`
-**Creates:**
-| shoe_name | size | price | stockx_bid | stockx_ask |
-|-----------|------|-------|------------|------------|
-| Supreme air max 1 87 white | 11.5 | 210 | $95 | $125 |
-| Supreme air max 1 87 white | 11.5 | 210 | $95 | $125 |
-| Supreme air max 1 87 white | 12 | 210 | $98 | $130 |
+## Size Matching
 
-## 🔧 Features
+Automatically handles:
+- Standard US men's sizes (8, 8.5, 9, etc.)
+- Youth sizes (Y6, Y7, etc.)
+- Women's sizes (W8, W8.5, etc.)
+- International sizes (UK, EU when available)
 
-### Smart Rate Limiting
-- **Retry Logic**: Automatically retries on 429 errors (up to 3 attempts)
-- **Intelligent Timing**: 2-second intervals (30 requests/minute)
-- **No Item Loss**: Never skips items due to temporary rate limits
+## Performance
 
-### Flexible Input Formats
-- **Pasted Lists**: Copy from Excel/Google Sheets and paste as text file
-- **Multiple CSV Formats**: Handles various inventory layouts
-- **Smart Size Detection**: Matches M10, 10M, Youth sizes, etc.
-- **Brand Intelligence**: Recognizes Nike, Jordan, Adidas patterns
+- **Rate Limiting**: 30 requests/minute (2-second intervals)
+- **Retry Logic**: Up to 3 attempts on rate limit errors
+- **Caching**: Duplicate searches avoided
+- **Progress Tracking**: Real-time progress updates
+- **Dual API Integration**: StockX for market data, Alias for pricing insights
 
-## 📈 CSV Input Formats
+## Files
 
-### Format 1: Pasted List (RECOMMENDED) ✨
-```
-Jordan 3 white cement 88 - size 11 ($460)
-Nike dunk low sandrift- size 11W ($110)
-Supreme air max 1 87 white - size 11.5x2, 12 ($210)
-```
+- `inventory_stockx_analyzer.py` - Main analyzer
+- `README.md` - This documentation
 
-### Format 2: Complete Rows
-```csv
-Nike Dunk Panda,M10,Brand New,,60,
-Jordan 1 Chicago,M9,Used,Small flaw,45,
-```
+## Authentication
 
-### Format 3: Grouped Format  
-```csv
-Nike Dunk Low Panda
-M8,Brand New,65
-M9,Brand New,65
-M10,Brand New,65
-```
-
-## 🎯 Success Metrics
-
-- **High Match Rate**: 85-95% successful StockX matches
-- **Rate Limit Resilience**: Automatic retry on 429 errors
-- **Perfect Parsing**: Zero mistakes on pasted list format
-- **Comprehensive Data**: All pricing data in one report
-
-## ⚡ Performance
-
-- **Processing Speed**: ~30 items per minute (safe rate)
-- **Auto-Retry**: Up to 3 attempts per item on rate limits
-- **Memory Efficient**: Caches results to avoid duplicate API calls
-- **Intelligent Format Detection**: Automatically picks best parser
-
-## 🔄 Workflow
-
-1. **Input**: Paste your list into a text file OR upload CSV
-2. **Auto-Detection**: System automatically detects format
-3. **Parse**: Extracts all shoe names, sizes, quantities, prices perfectly
-4. **Search StockX**: Finds best product matches using smart algorithms  
-5. **Size Matching**: Matches your sizes to StockX variants
-6. **Market Data**: Gets current bid/ask prices
-7. **Enhanced CSV**: Generates comprehensive report
-
-## 🛡️ Error Handling
-
-- **Rate Limiting**: Automatic retry with exponential backoff
-- **Network Issues**: Graceful handling of timeouts/errors  
-- **Invalid Data**: Continues processing other items
-- **Size Mismatches**: Shows available sizes for debugging
-- **Parsing Errors**: Clear messages for unparseable lines
-
-## 📋 Requirements
-
-- Python 3.6+
-- Valid StockX authentication (handled by parent app)
-- Text file with pasted list OR CSV file with shoe inventory
-
-## 🎉 Recent Improvements
-
-✅ **Sales History FIXED**: Implemented proper `/selling/orders/history` endpoint  
-✅ **Pasted List Support**: Copy from Excel/Google Sheets and process directly  
-✅ **Perfect Parsing**: Zero mistakes with complex size/quantity formats  
-✅ **Enhanced Rate Limiting**: No more skipped items on 429 errors  
-✅ **Simplified Interface**: Removed eBay tools for focus  
-✅ **Column Reordering**: stockx_bid and stockx_ask right after price  
-✅ **Auto-Format Detection**: Handles any input format automatically 
+Requires valid StockX authentication. The system will use your existing authentication setup from the main application. Alias API integration uses embedded API key. 

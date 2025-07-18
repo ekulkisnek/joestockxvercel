@@ -35,12 +35,16 @@ class InventoryItem:
         # StockX data
         self.stockx_bid = None
         self.stockx_ask = None
-        # Sales history data (new)
-        self.last5_avg_price = None
-        self.last5_avg_days = None
-        self.last5_price_range = None
-        self.last5_time_range = None
-        # Existing fields continued
+        # Alias pricing data
+        self.lowest_consigned = None
+        self.last_consigned_price = None
+        self.last_consigned_date = None
+        self.lowest_with_you = None
+        self.last_with_you_price = None
+        self.last_with_you_date = None
+        self.consignment_price = None
+        self.ship_to_verify_price = None
+        # StockX metadata
         self.stockx_sku = None
         self.stockx_url = None
         self.stockx_size = None
@@ -72,29 +76,9 @@ class InventoryStockXAnalyzer:
         """Parse CSV file flexibly - handles multiple formats"""
         items = []
 
-        # First, try to read as CSV - if it fails, treat as pasted list
-        try:
-            with open(csv_file, 'r', encoding='utf-8') as file:
-                content = file.read().strip()
-                
-            # Check if this looks like a pasted list format rather than CSV
-            # Indicators: contains " - size " patterns and prices in parentheses
-            if (('- size' in content or ' size ' in content) and 
-                '(' in content and '$' in content and 
-                ',' not in content[:100]):  # First 100 chars shouldn't have CSV commas
-                
-                print("📋 Detected pasted list format - using specialized parser")
-                return self.parse_pasted_list(content)
-            
-            # Otherwise parse as CSV
-            lines = list(csv.reader(content.splitlines()))
-            
-        except Exception as e:
-            print(f"⚠️ Error reading file as CSV, trying as pasted text: {e}")
-            # If CSV parsing fails, try as pasted list
-            with open(csv_file, 'r', encoding='utf-8') as file:
-                content = file.read().strip()
-            return self.parse_pasted_list(content)
+        # Read and parse as CSV
+        with open(csv_file, 'r', encoding='utf-8') as file:
+            lines = list(csv.reader(file))
 
         current_shoe = None
 
@@ -512,109 +496,146 @@ class InventoryStockXAnalyzer:
             print(f"   ❌ Market data error: {str(e)}")
             return None
 
-    def get_last_5_sales(self, product_id: str, variant_id: str) -> Optional[Dict]:
-        """Get last 5 sales for specific variant using the correct orders history endpoint"""
+
+
+    def get_alias_pricing_data(self, shoe_name: str, size: str) -> Optional[Dict]:
+        """Get pricing data from Alias API for the requested data points"""
         try:
-            headers = self.client._get_headers()
-            response = requests.get(
-                f'{self.client.base_url}/selling/orders/history',
+            import requests
+            
+            # Alias API configuration
+            api_key = "goatapi_167AEOZwPmcFAwZ2RbHv7AaGfSYpdF2wq1zdxzT"
+            base_url = "https://api.alias.org/api/v1"
+            
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Parse size to float
+            try:
+                size_float = float(size.replace('Y', '').replace('W', ''))
+            except (ValueError, AttributeError):
+                size_float = 10.0  # Default size if parsing fails
+            
+            # Step 1: Search for the shoe in Alias catalog
+            print(f"   🔍 Searching Alias for: {shoe_name}")
+            search_response = requests.get(
+                f"{base_url}/catalog",
                 headers=headers,
-                params={
-                    'productId': product_id,
-                    'variantId': variant_id,
-                    'pageSize': 5,
-                    'orderStatus': 'COMPLETED'  # Only get completed sales
-                },
+                params={'query': shoe_name, 'limit': 1},
                 timeout=15
             )
-
-            if response.status_code == 200:
-                data = response.json()
-                orders = data.get('orders', [])
-                
-                if not orders:
-                    print(f"   📊 No sales history found")
-                    return None
-                
-                # Calculate metrics from the orders
-                prices = []
-                dates = []
-                
-                for order in orders:
-                    amount = order.get('amount')
-                    created_at = order.get('createdAt')
-                    
-                    if amount and created_at:
-                        try:
-                            # Parse price (amount is already a string number)
-                            price = float(str(amount).replace('$', '').replace(',', ''))
-                            prices.append(price)
-                            
-                            # Parse date (ISO 8601 format like "2021-08-25T13:51:47.000Z")
-                            from datetime import datetime
-                            date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                            dates.append(date)
-                        except (ValueError, TypeError) as e:
-                            print(f"   ⚠️ Error parsing sales data: {e}")
-                            continue
-                
-                if not prices or not dates:
-                    print(f"   📊 No valid sales data found")
-                    return None
-                
-                # Calculate average price
-                avg_price = sum(prices) / len(prices)
-                
-                # Calculate price range
-                min_price = min(prices)
-                max_price = max(prices)
-                price_range = f"{min_price:.0f}-{max_price:.0f}"
-                
-                # Calculate time metrics (if we have multiple dates)
-                avg_days = None
-                time_range = None
-                
-                if len(dates) > 1:
-                    # Sort dates oldest to newest
-                    dates.sort()
-                    
-                    # Calculate average days between sales
-                    time_diffs = []
-                    for i in range(1, len(dates)):
-                        diff = (dates[i] - dates[i-1]).days
-                        time_diffs.append(diff)
-                    
-                    if time_diffs:
-                        avg_days = sum(time_diffs) / len(time_diffs)
-                    
-                    # Calculate time range (first to last)
-                    first_date = dates[0]
-                    last_date = dates[-1]
-                    total_days = (last_date - first_date).days
-                    time_range = f"0-{total_days}" if total_days > 0 else "0-0"
-                
-                print(f"   📊 Sales history: {len(orders)} sales, avg ${avg_price:.0f}, range {price_range}")
-                
-                return {
-                    'avg_price': avg_price,
-                    'avg_days': avg_days,
-                    'price_range': price_range,
-                    'time_range': time_range,
-                    'sales_count': len(orders)
-                }
-                
-            elif response.status_code == 429:
-                print(f"   ⚠️ Rate limited on sales history - will retry")
-                return "RATE_LIMITED"
-            elif response.status_code == 403:
-                print(f"   ⚠️ Sales history access forbidden (403) - may need seller permissions")
+            
+            if search_response.status_code != 200:
+                print(f"   ❌ Alias search failed: {search_response.status_code}")
                 return None
-            else:
-                print(f"   ❌ Sales history error: {response.status_code}")
+                
+            search_data = search_response.json()
+            catalog_items = search_data.get('catalog_items', [])
+            
+            if not catalog_items:
+                print(f"   ❌ No Alias catalog match found")
                 return None
-
+            
+            catalog_id = catalog_items[0].get('catalog_id')
+            if not catalog_id:
+                print(f"   ❌ No catalog ID found")
+                return None
+            
+            print(f"   ✅ Found Alias match: {catalog_items[0].get('name', 'Unknown')}")
+            
+            # Step 2: Get pricing data with all the requested parameters
+            params = {
+                'catalog_id': catalog_id,
+                'size': size_float,
+                'product_condition': 'PRODUCT_CONDITION_NEW',
+                'packaging_condition': 'PACKAGING_CONDITION_GOOD_CONDITION'
+            }
+            
+            # Get overall availability (ship to verify + lowest with you)
+            overall_response = requests.get(
+                f"{base_url}/pricing_insights/availability",
+                headers=headers,
+                params=params,
+                timeout=15
+            )
+            
+            # Get consigned availability (lowest consigned + consignment price)
+            consigned_params = params.copy()
+            consigned_params['consigned'] = True
+            consigned_response = requests.get(
+                f"{base_url}/pricing_insights/availability",
+                headers=headers,
+                params=consigned_params,
+                timeout=15
+            )
+            
+            # Get recent sales for last with you and last consigned
+            sales_response = requests.get(
+                f"{base_url}/pricing_insights/recent_sales",
+                headers=headers,
+                params={**params, 'limit': 10},
+                timeout=15
+            )
+            
+            # Get recent consigned sales
+            consigned_sales_params = params.copy()
+            consigned_sales_params.update({'consigned': True, 'limit': 10})
+            consigned_sales_response = requests.get(
+                f"{base_url}/pricing_insights/recent_sales",
+                headers=headers,
+                params=consigned_sales_params,
+                timeout=15
+            )
+            
+            # Process the responses
+            overall_data = overall_response.json().get('availability', {}) if overall_response.status_code == 200 else {}
+            consigned_data = consigned_response.json().get('availability', {}) if consigned_response.status_code == 200 else {}
+            sales_data = sales_response.json().get('recent_sales', []) if sales_response.status_code == 200 else []
+            consigned_sales_data = consigned_sales_response.json().get('recent_sales', []) if consigned_sales_response.status_code == 200 else []
+            
+            # Extract the specific data points you requested
+            def cents_to_dollars(cents):
+                if cents is None:
+                    return None
+                try:
+                    return float(cents) / 100
+                except (ValueError, TypeError):
+                    return None
+            
+            # Get last sale data
+            last_sale = sales_data[0] if sales_data else {}
+            last_consigned = consigned_sales_data[0] if consigned_sales_data else {}
+            
+            result = {
+                # Ship to verify price
+                'ship_to_verify_price': cents_to_dollars(overall_data.get('lowest_listing_price_cents')),
+                
+                # Consignment price  
+                'consignment_price': cents_to_dollars(consigned_data.get('lowest_listing_price_cents')),
+                
+                # Lowest with you (overall lowest)
+                'lowest_with_you': cents_to_dollars(overall_data.get('lowest_listing_price_cents')),
+                
+                # Lowest consigned
+                'lowest_consigned': cents_to_dollars(consigned_data.get('lowest_listing_price_cents')),
+                
+                # Last with you (most recent sale)
+                'last_with_you_price': cents_to_dollars(last_sale.get('price_cents')),
+                'last_with_you_date': last_sale.get('purchased_at'),
+                
+                # Last consigned
+                'last_consigned_price': cents_to_dollars(last_consigned.get('price_cents')),
+                'last_consigned_date': last_consigned.get('purchased_at'),
+            }
+            
+            print(f"   💰 Alias data: Ship ${result['ship_to_verify_price'] or 'N/A'} | Consigned ${result['consignment_price'] or 'N/A'}")
+            
+            return result
+            
         except Exception as e:
-            print(f"   ❌ Sales history error: {str(e)}")
+            print(f"   ❌ Alias API error: {str(e)}")
             return None
 
     def search_stockx_for_item(self, item: InventoryItem) -> bool:
@@ -629,13 +650,33 @@ class InventoryStockXAnalyzer:
             if cached_result:
                 item.stockx_bid = f"${cached_result['bid']}" if cached_result['bid'] else None
                 item.stockx_ask = f"${cached_result['ask']}" if cached_result['ask'] else None
-                # Add cached sales data
-                if cached_result.get('last5_avg_price'):
-                    item.last5_avg_price = f"${cached_result['last5_avg_price']:.0f}"
-                if cached_result.get('last5_avg_days'):
-                    item.last5_avg_days = f"{cached_result['last5_avg_days']:.1f}"
-                item.last5_price_range = cached_result.get('last5_price_range')
-                item.last5_time_range = cached_result.get('last5_time_range')
+                # Add cached Alias data
+                if cached_result.get('lowest_consigned'):
+                    item.lowest_consigned = f"${cached_result['lowest_consigned']:.2f}"
+                else:
+                    item.lowest_consigned = None
+                if cached_result.get('last_consigned_price'):
+                    item.last_consigned_price = f"${cached_result['last_consigned_price']:.2f}"
+                else:
+                    item.last_consigned_price = None
+                item.last_consigned_date = cached_result.get('last_consigned_date')
+                if cached_result.get('lowest_with_you'):
+                    item.lowest_with_you = f"${cached_result['lowest_with_you']:.2f}"
+                else:
+                    item.lowest_with_you = None
+                if cached_result.get('last_with_you_price'):
+                    item.last_with_you_price = f"${cached_result['last_with_you_price']:.2f}"
+                else:
+                    item.last_with_you_price = None
+                item.last_with_you_date = cached_result.get('last_with_you_date')
+                if cached_result.get('consignment_price'):
+                    item.consignment_price = f"${cached_result['consignment_price']:.2f}"
+                else:
+                    item.consignment_price = None
+                if cached_result.get('ship_to_verify_price'):
+                    item.ship_to_verify_price = f"${cached_result['ship_to_verify_price']:.2f}"
+                else:
+                    item.ship_to_verify_price = None
                 item.stockx_sku = cached_result.get('sku')
                 item.stockx_url = cached_result.get('url')
                 item.stockx_size = cached_result.get('size')
@@ -699,14 +740,13 @@ class InventoryStockXAnalyzer:
                 print("   ❌ No market data available")
                 self.cache[cache_key] = None
                 return False
+             
+            # Get Alias pricing data for the requested data points
+            # Try with original shoe name first, then StockX name if no match
+            alias_data = self.get_alias_pricing_data(item.shoe_name, str(variant_size))
+            if not alias_data:
+                alias_data = self.get_alias_pricing_data(best_product['title'], str(variant_size))
             
-            # Get last 5 sales data
-            sales_data = self.get_last_5_sales(best_product['id'], variant_id)
-            
-            # Handle rate limiting for sales data - return special code to trigger retry
-            if sales_data == "RATE_LIMITED":
-                return "RATE_LIMITED"
-
             # Extract pricing data
             bid_amount = market_data.get('highestBidAmount')
             ask_amount = market_data.get('lowestAskAmount')
@@ -728,14 +768,18 @@ class InventoryStockXAnalyzer:
             if url_key:
                 stockx_url = f"https://stockx.com/{url_key}"
 
-            # Include sales data in result
+            # Include Alias data in result
             result = {
                 'bid': bid_amount,
                 'ask': ask_amount,
-                'last5_avg_price': sales_data.get('avg_price') if sales_data else None,
-                'last5_avg_days': sales_data.get('avg_days') if sales_data else None,
-                'last5_price_range': sales_data.get('price_range') if sales_data else None,
-                'last5_time_range': sales_data.get('time_range') if sales_data else None,
+                'lowest_consigned': alias_data.get('lowest_consigned') if alias_data else None,
+                'last_consigned_price': alias_data.get('last_consigned_price') if alias_data else None,
+                'last_consigned_date': alias_data.get('last_consigned_date') if alias_data else None,
+                'lowest_with_you': alias_data.get('lowest_with_you') if alias_data else None,
+                'last_with_you_price': alias_data.get('last_with_you_price') if alias_data else None,
+                'last_with_you_date': alias_data.get('last_with_you_date') if alias_data else None,
+                'consignment_price': alias_data.get('consignment_price') if alias_data else None,
+                'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
                 'sku': best_product.get('style_id', ''),
                 'url': stockx_url,
                 'size': str(variant_size),
@@ -746,12 +790,25 @@ class InventoryStockXAnalyzer:
 
             item.stockx_bid = f"${result['bid']}" if result['bid'] else None
             item.stockx_ask = f"${result['ask']}" if result['ask'] else None
-            # Add sales data to item
-            if sales_data:
-                item.last5_avg_price = f"${sales_data['avg_price']:.0f}" if sales_data.get('avg_price') else None
-                item.last5_avg_days = f"{sales_data['avg_days']:.1f}" if sales_data.get('avg_days') else None
-                item.last5_price_range = sales_data.get('price_range')
-                item.last5_time_range = sales_data.get('time_range')
+            # Add Alias data to item
+            if alias_data:
+                item.lowest_consigned = f"${alias_data['lowest_consigned']:.2f}" if alias_data.get('lowest_consigned') else None
+                item.last_consigned_price = f"${alias_data['last_consigned_price']:.2f}" if alias_data.get('last_consigned_price') else None
+                item.last_consigned_date = alias_data.get('last_consigned_date')
+                item.lowest_with_you = f"${alias_data['lowest_with_you']:.2f}" if alias_data.get('lowest_with_you') else None
+                item.last_with_you_price = f"${alias_data['last_with_you_price']:.2f}" if alias_data.get('last_with_you_price') else None
+                item.last_with_you_date = alias_data.get('last_with_you_date')
+                item.consignment_price = f"${alias_data['consignment_price']:.2f}" if alias_data.get('consignment_price') else None
+                item.ship_to_verify_price = f"${alias_data['ship_to_verify_price']:.2f}" if alias_data.get('ship_to_verify_price') else None
+            else:
+                item.lowest_consigned = None
+                item.last_consigned_price = None
+                item.last_consigned_date = None
+                item.lowest_with_you = None
+                item.last_with_you_price = None
+                item.last_with_you_date = None
+                item.consignment_price = None
+                item.ship_to_verify_price = None
             item.stockx_sku = result['sku']
             item.stockx_url = result['url']
             item.stockx_size = result['size']
@@ -762,8 +819,8 @@ class InventoryStockXAnalyzer:
             self.cache[cache_key] = result
 
             print(f"   💰 Bid: ${result['bid'] or 'N/A'} | Ask: ${result['ask'] or 'N/A'} | Size: {result['size']}", flush=True)
-            if sales_data:
-                print(f"   📊 Last 5: Avg ${sales_data['avg_price']:.0f}, Range {sales_data['price_range']}", flush=True)
+            if alias_data:
+                print(f"   📦 Alias: Ship ${alias_data['ship_to_verify_price'] or 'N/A'} | Consigned ${alias_data['consignment_price'] or 'N/A'}", flush=True)
             return True
 
         except Exception as e:
@@ -819,12 +876,12 @@ class InventoryStockXAnalyzer:
         return None
 
     def process_inventory(self, csv_file: str, output_file: str = None) -> str:
-        """Process entire inventory"""
+        """Process CSV inventory"""
         if not output_file:
             input_path = Path(csv_file)
             output_file = input_path.parent / f"stockx_enhanced_{input_path.name}"
 
-        print(f"📊 Processing inventory: {csv_file}", flush=True)
+        print(f"📊 Processing CSV inventory: {csv_file}", flush=True)
         print(f"💾 Output will be saved to: {output_file}", flush=True)
         print("=" * 80, flush=True)
 
@@ -835,6 +892,37 @@ class InventoryStockXAnalyzer:
             return ""
 
         print(f"✅ Parsed {len(items)} inventory items", flush=True)
+        
+        # Use shared processing logic
+        return self._process_items_and_save(items, output_file)
+
+    def process_pasted_list(self, text_file: str, output_file: str = None) -> str:
+        """Process pasted list format (separate from CSV processing)"""
+        if not output_file:
+            input_path = Path(text_file)
+            output_file = input_path.parent / f"stockx_enhanced_{input_path.name}"
+
+        print(f"📋 Processing pasted list: {text_file}", flush=True)
+        print(f"💾 Output will be saved to: {output_file}", flush=True)
+        print("=" * 80, flush=True)
+
+        # Read as text and parse
+        with open(text_file, 'r', encoding='utf-8') as file:
+            content = file.read().strip()
+        
+        items = self.parse_pasted_list(content)
+
+        if not items:
+            print("❌ No inventory items found in pasted list")
+            return ""
+
+        print(f"✅ Parsed {len(items)} inventory items from pasted list", flush=True)
+        
+        # Continue with normal processing
+        return self._process_items_and_save(items, output_file)
+    
+    def _process_items_and_save(self, items: List[InventoryItem], output_file: str) -> str:
+        """Common processing logic for both CSV and pasted list"""
         print(f"\n🔍 Processing {len(items)} items...", flush=True)
         
         # Calculate estimated time (2 seconds per item)
@@ -901,13 +989,15 @@ class InventoryStockXAnalyzer:
         return output_file
 
     def _write_enhanced_csv(self, items: List[InventoryItem], output_file: str):
-        """Write enhanced CSV with reordered columns"""
-        # Column order: basic info, then bid/ask prices, then everything else
+        """Write enhanced CSV with reordered columns including Alias pricing data"""
+        # Column order: basic info, then bid/ask prices, then Alias data, then everything else  
         all_columns = [
             'original_shoe_name', 'original_size', 'original_price', 'condition',
             'stockx_bid', 'stockx_ask',
             'bid_profit', 'ask_profit',
-            'last5_avg_price', 'last5_avg_days', 'last5_price_range', 'last5_time_range',
+            'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
+            'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
+            'consignment_price', 'ship_to_verify_price',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
 
@@ -925,10 +1015,14 @@ class InventoryStockXAnalyzer:
                     'ask_profit': item.ask_profit or '',
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
-                    'last5_avg_price': item.last5_avg_price or '',
-                    'last5_avg_days': item.last5_avg_days or '',
-                    'last5_price_range': item.last5_price_range or '',
-                    'last5_time_range': item.last5_time_range or '',
+                    'lowest_consigned': item.lowest_consigned or '',
+                    'last_consigned_price': item.last_consigned_price or '',
+                    'last_consigned_date': item.last_consigned_date or '',
+                    'lowest_with_you': item.lowest_with_you or '',
+                    'last_with_you_price': item.last_with_you_price or '',
+                    'last_with_you_date': item.last_with_you_date or '',
+                    'consignment_price': item.consignment_price or '',
+                    'ship_to_verify_price': item.ship_to_verify_price or '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
@@ -936,30 +1030,73 @@ class InventoryStockXAnalyzer:
                 }
                 writer.writerow(row)
 
+    def _looks_like_header_row(self, row: List[str]) -> bool:
+        """Check if this row looks like a CSV header"""
+        if not row:
+            return False
+        
+        # Common header indicators
+        header_words = ['shoe', 'name', 'size', 'price', 'condition', 'brand', 'style', 'sku', 'product']
+        first_cell = row[0].lower().strip()
+        
+        # Check if first cell contains header-like words
+        for word in header_words:
+            if word in first_cell:
+                return True
+                
+        # Check if row has typical header patterns
+        if len(row) >= 2:
+            for cell in row[:3]:  # Check first 3 cells
+                cell_lower = cell.lower().strip()
+                if any(word in cell_lower for word in header_words):
+                    return True
+                    
+        return False
+
 def main():
     """Main function"""
     if len(sys.argv) < 2:
         print("📊 Inventory StockX Analyzer")
         print("=" * 40)
-        print("Usage: python inventory_stockx_analyzer.py <csv_file>")
+        print("Usage:")
+        print("  python inventory_stockx_analyzer.py <csv_file>          # Process CSV file")
+        print("  python inventory_stockx_analyzer.py --list <text_file>  # Process pasted list")
+        print()
+        print("Examples:")
+        print("  python inventory_stockx_analyzer.py inventory.csv")
+        print("  python inventory_stockx_analyzer.py --list my_shoes.txt")
         return
 
-    input_file = sys.argv[1]
+    # Check for pasted list flag
+    if len(sys.argv) >= 3 and sys.argv[1] == '--list':
+        input_file = sys.argv[2]
+        if not Path(input_file).exists():
+            print(f"❌ Error: File not found: {input_file}")
+            return
+            
+        analyzer = InventoryStockXAnalyzer()
+        try:
+            output_file = analyzer.process_pasted_list(input_file)
+            print(f"\n🎉 Pasted list analysis complete! Check {output_file} for results.")
+        except Exception as e:
+            print(f"❌ Error processing pasted list: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    else:
+        # Regular CSV processing
+        input_file = sys.argv[1]
+        if not Path(input_file).exists():
+            print(f"❌ Error: File not found: {input_file}")
+            return
 
-    if not Path(input_file).exists():
-        print(f"❌ Error: File not found: {input_file}")
-        return
-
-    analyzer = InventoryStockXAnalyzer()
-
-    try:
-        output_file = analyzer.process_inventory(input_file)
-        print(f"\n🎉 Analysis complete! Check {output_file} for results.")
-
-    except Exception as e:
-        print(f"❌ Error processing file: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        analyzer = InventoryStockXAnalyzer()
+        try:
+            output_file = analyzer.process_inventory(input_file)
+            print(f"\n🎉 CSV analysis complete! Check {output_file} for results.")
+        except Exception as e:
+            print(f"❌ Error processing CSV file: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()
