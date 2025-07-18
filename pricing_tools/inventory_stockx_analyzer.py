@@ -26,11 +26,21 @@ from smart_stockx_client import SmartStockXClient
 
 class InventoryItem:
     """Represents a single inventory item"""
-    def __init__(self, shoe_name: str, size: str = None, price: str = None, condition: str = None):
+    def __init__(self, shoe_name: str, size: str = None, price: str = None, condition: str = None, original_data: Dict = None):
         self.shoe_name = shoe_name.strip() if shoe_name else ""
         self.size = size.strip() if size else ""
         self.price = price.strip() if price else ""
         self.condition = condition.strip() if condition else ""
+        
+        # Store original CSV data to preserve all columns
+        self.original_data = original_data or {}
+        
+        # Extract and append condition notes from shoe name
+        self.condition_notes = self._extract_condition_notes(self.shoe_name)
+        if self.condition_notes and self.condition:
+            self.condition = f"{self.condition} {self.condition_notes}".strip()
+        elif self.condition_notes:
+            self.condition = self.condition_notes
 
         # StockX data
         self.stockx_bid = None
@@ -53,6 +63,30 @@ class InventoryItem:
         # Profit calculations
         self.bid_profit = None
         self.ask_profit = None
+    
+    def _extract_condition_notes(self, shoe_name: str) -> str:
+        """Extract condition notes from shoe name (DS, VNDS, no box, etc.)"""
+        if not shoe_name:
+            return ""
+        
+        condition_patterns = [
+            r'\(DS\)',
+            r'\(VNDS\)',
+            r'\(no box\)',
+            r'\(missing laces\)',
+            r'\(slight markings[^)]*\)',
+            r'\(worn\)',
+            r'\(used\)',
+            r'\(new\)',
+            r'\(deadstock\)',
+        ]
+        
+        extracted_notes = []
+        for pattern in condition_patterns:
+            matches = re.findall(pattern, shoe_name, re.IGNORECASE)
+            extracted_notes.extend(matches)
+        
+        return " ".join(extracted_notes).strip()
 
 class InventoryStockXAnalyzer:
     def __init__(self):
@@ -62,9 +96,54 @@ class InventoryStockXAnalyzer:
         self.processed_count = 0
         self.matches_found = 0
         self.cache = {}
+        
+        # Setup robust token file handling for different deployment environments
+        self._setup_authentication()
+
+    def _setup_authentication(self):
+        """Setup robust authentication handling for different deployment environments"""
+        # List of possible token file locations to try
+        possible_token_files = [
+            'tokens_full_scope.json',                    # Same directory
+            '../tokens_full_scope.json',                 # Parent directory  
+            '../../tokens_full_scope.json',              # Grandparent directory
+            os.path.expanduser('~/tokens_full_scope.json'), # Home directory
+            '/tmp/tokens_full_scope.json',               # Temp directory
+        ]
+        
+        # Try to find existing token file
+        token_file_found = None
+        for token_file in possible_token_files:
+            if os.path.exists(token_file):
+                token_file_found = token_file
+                print(f"📋 Found token file: {token_file}")
+                break
+        
+        if token_file_found:
+            self.client.token_file = token_file_found
+            try:
+                self.client._ensure_authentication()
+                print("✅ Authentication successful")
+                return
+            except Exception as e:
+                print(f"⚠️ Token file found but authentication failed: {e}")
+        else:
+            print("⚠️ No existing token file found")
+        
+        # If no token file found or authentication failed, try to authenticate fresh
+        print("🔄 Attempting fresh authentication...")
+        try:
+            # Set a default token file location
+            self.client.token_file = 'tokens_full_scope.json'
+            self.client._ensure_authentication()
+            print("✅ Fresh authentication successful")
+        except Exception as e:
+            print(f"❌ Fresh authentication failed: {e}")
+            print("💡 Please ensure you have valid StockX credentials configured")
+            # Don't raise the exception - let the processing continue and handle auth errors per request
 
     def _convert_date_to_days_ago(self, date_string: str) -> str:
-        """Convert ISO date string to 'X days ago' format"""
+        """Convert ISO date string to number of days ago"""
         if not date_string:
             return ""
         
@@ -79,123 +158,117 @@ class InventoryStockXAnalyzer:
             today = datetime.now(date_obj.tzinfo) if date_obj.tzinfo else datetime.now()
             days_diff = (today - date_obj).days
             
-            if days_diff == 0:
-                return "today"
-            elif days_diff == 1:
-                return "1 day ago"
-            else:
-                return f"{days_diff} days ago"
+            # Return just the number
+            return str(days_diff)
                 
         except (ValueError, TypeError):
             return ""
-        
-        # Set correct token file path - check if we're in pricing_tools directory
-        if os.path.basename(os.getcwd()) == 'pricing_tools':
-            self.client.token_file = '../tokens_full_scope.json'
-        else:
-            self.client.token_file = 'tokens_full_scope.json'
-        
-        # Now ensure authentication with correct path
-        self.client._ensure_authentication()
 
     def parse_csv_flexible(self, csv_file: str) -> List[InventoryItem]:
-        """Parse CSV file flexibly - handles multiple formats"""
+        """Parse CSV file while preserving all original columns"""
         items = []
 
         # Read and parse as CSV
         with open(csv_file, 'r', encoding='utf-8') as file:
             lines = list(csv.reader(file))
 
-        current_shoe = None
+        if not lines:
+            return items
 
-        for i, row in enumerate(lines):
+        # Store header information for column preservation
+        self.original_headers = lines[0] if lines else []
+        self.has_headers = self._looks_like_header_row(self.original_headers)
+        
+        start_row = 1 if self.has_headers else 0
+        
+        # Detect column mappings from headers or content analysis
+        shoe_col, size_col, price_col, condition_col = self._detect_column_mappings(lines)
+        
+        for i in range(start_row, len(lines)):
+            row = lines[i]
             if not row or all(not cell.strip() for cell in row):
                 continue
 
-            first_cell = row[0].strip() if row[0] else ""
+            # Create dictionary of original data for preservation
+            original_data = {}
+            for j, header in enumerate(self.original_headers):
+                if j < len(row):
+                    original_data[header] = row[j]
 
-            # Format 1: Complete row format like "Nike Dunk Reverse Panda,M10,Brand New,,60,"
-            if self._is_complete_item_row(row):
-                shoe_name = first_cell
-                size = ""
-                condition = ""
-                price = ""
+            # Extract the core data we need for processing
+            shoe_name = row[shoe_col] if shoe_col is not None and shoe_col < len(row) else ""
+            size = row[size_col] if size_col is not None and size_col < len(row) else ""
+            price = row[price_col] if price_col is not None and price_col < len(row) else ""
+            condition = row[condition_col] if condition_col is not None and condition_col < len(row) else ""
 
-                # Parse remaining columns
-                for j in range(1, len(row)):
-                    cell = row[j].strip() if row[j] else ""
-                    if not cell:
-                        continue
-
-                    if self._looks_like_size(cell) and not size:
-                        size = cell
-                    elif self._looks_like_condition(cell) and not condition:
-                        condition = cell
-                    elif self._looks_like_price(cell) and not price:
-                        price = cell
-
-                item = InventoryItem(shoe_name, size, price, condition)
+            if shoe_name.strip():  # Only process if we have a shoe name
+                item = InventoryItem(shoe_name, size, price, condition, original_data)
                 items.append(item)
 
-            # Format 2: Group header with sizes below
-            elif self._looks_like_shoe_name(first_cell) and len(row) <= 2:
-                current_shoe = first_cell
-                # Check if there's additional data in the same row
-                if len(row) > 1 and row[1].strip():
-                    # This might be price info like "Nike Dunk Low Blueberry,60"
-                    price_candidate = row[1].strip()
-                    if self._looks_like_price(price_candidate):
-                        # This row has shoe name and price, sizes will be below
-                        continue
+        return items
 
-            # Format 3: Size row under group header  
-            elif current_shoe and self._looks_like_size_row(row):
-                for cell in row:
-                    cell = cell.strip()
-                    if self._looks_like_size(cell):
-                        condition = ""
-                        price = ""
-                        
-                        # Look for condition and price in the same row
-                        for other_cell in row:
-                            other_cell = other_cell.strip()
-                            if other_cell != cell:  # Don't re-process the size cell
-                                if self._looks_like_condition(other_cell) and not condition:
-                                    condition = other_cell
-                                elif self._looks_like_price(other_cell) and not price:
-                                    price = other_cell
-
-                        item = InventoryItem(current_shoe, cell, price, condition)
-                        items.append(item)
-
-            # Format 4: Standard CSV with headers
-            elif i == 0 and self._looks_like_header_row(row):
-                # This is a header row, skip it
-                continue
-            elif i > 0 and len(row) >= 2:
-                # Standard CSV format: shoe_name, size, condition, price (flexible order)
-                shoe_name = first_cell
-                size = ""
-                condition = ""
-                price = ""
-
-                for cell in row[1:]:  # Skip first cell (shoe name)
+    def _detect_column_mappings(self, lines: List[List[str]]) -> Tuple[int, int, int, int]:
+        """Detect which columns contain shoe name, size, price, and condition"""
+        if not lines:
+            return None, None, None, None
+            
+        headers = lines[0] if self.has_headers else []
+        
+        # Initialize column indices
+        shoe_col = None
+        size_col = None  
+        price_col = None
+        condition_col = None
+        
+        # Try to detect from headers first
+        if self.has_headers:
+            for i, header in enumerate(headers):
+                header_lower = header.lower().strip()
+                
+                if shoe_col is None and any(word in header_lower for word in ['shoe', 'name', 'product', 'item']):
+                    shoe_col = i
+                elif size_col is None and 'size' in header_lower:
+                    size_col = i  
+                elif price_col is None and any(word in header_lower for word in ['price', 'cost', 'amount']):
+                    price_col = i
+                elif condition_col is None and any(word in header_lower for word in ['condition', 'state', 'quality']):
+                    condition_col = i
+        
+        # Fallback: analyze content to detect columns
+        if shoe_col is None or size_col is None:
+            # Analyze first few data rows to detect patterns
+            sample_rows = lines[1:min(6, len(lines))] if self.has_headers else lines[:5]
+            
+            for row in sample_rows:
+                if not row:
+                    continue
+                    
+                for i, cell in enumerate(row):
                     cell = cell.strip()
                     if not cell:
                         continue
+                        
+                    # Detect shoe name column (usually longest text, has brand names)
+                    if shoe_col is None and len(cell) > 10 and any(brand in cell.upper() for brand in ['JORDAN', 'NIKE', 'ADIDAS', 'YEEZY']):
+                        shoe_col = i
                     
-                    if self._looks_like_size(cell) and not size:
-                        size = cell
-                    elif self._looks_like_condition(cell) and not condition:
-                        condition = cell
-                    elif self._looks_like_price(cell) and not price:
-                        price = cell
-
-                if shoe_name:  # Only add if we have a shoe name
-                    item = InventoryItem(shoe_name, size, price, condition)
-                    items.append(item)
-
-        return items
+                    # Detect size column
+                    elif size_col is None and self._looks_like_size(cell):
+                        size_col = i
+                        
+                    # Detect price column  
+                    elif price_col is None and self._looks_like_price(cell):
+                        price_col = i
+                        
+                    # Detect condition column
+                    elif condition_col is None and self._looks_like_condition(cell):
+                        condition_col = i
+        
+        # Final fallback: use positional defaults
+        if shoe_col is None:
+            shoe_col = 0  # First column is usually shoe name
+        
+        return shoe_col, size_col, price_col, condition_col
 
     def parse_pasted_list(self, text: str) -> List[InventoryItem]:
         """Parse pasted list format like 'Jordan 3 white cement 88 - size 11 ($460)'"""
@@ -1055,23 +1128,83 @@ class InventoryStockXAnalyzer:
         return output_file
 
     def _write_enhanced_csv(self, items: List[InventoryItem], output_file: str):
-        """Write enhanced CSV with exact requested column order"""
-        # Exact column order as requested by user
-        all_columns = [
-            'original_shoe_name', 'original_size', 'stockx_bid', 'stockx_ask',
+        """Write enhanced CSV preserving original columns with smart ordering"""
+        if not items:
+            return
+            
+        # Get all original column names from first item
+        original_columns = list(items[0].original_data.keys()) if items[0].original_data else []
+        
+        # Define our new columns that we want to add
+        our_columns = [
+            'stockx_bid', 'stockx_ask',
             'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
-
+        
+        # Smart column ordering based on user requirements:
+        # 1. Original columns to the left, but reordered intelligently
+        # 2. Condition before shoe name
+        # 3. Price right after size
+        # 4. Our new columns in specified order
+        
+        ordered_columns = []
+        remaining_original = original_columns.copy()
+        
+        # Add condition columns first (to left of shoe name)
+        condition_cols = [col for col in original_columns if 'condition' in col.lower()]
+        for col in condition_cols:
+            if col in remaining_original:
+                ordered_columns.append(col)
+                remaining_original.remove(col)
+        
+        # Add shoe name column
+        shoe_cols = [col for col in original_columns if any(word in col.lower() for word in ['shoe', 'name', 'product', 'item'])]
+        for col in shoe_cols:
+            if col in remaining_original:
+                ordered_columns.append(col)
+                remaining_original.remove(col)
+        
+        # Add size column
+        size_cols = [col for col in original_columns if 'size' in col.lower()]
+        for col in size_cols:
+            if col in remaining_original:
+                ordered_columns.append(col)
+                remaining_original.remove(col)
+        
+        # Add price column right after size
+        price_cols = [col for col in original_columns if any(word in col.lower() for word in ['price', 'cost', 'amount'])]
+        for col in price_cols:
+            if col in remaining_original:
+                ordered_columns.append(col)
+                remaining_original.remove(col)
+        
+        # Add any remaining original columns
+        ordered_columns.extend(remaining_original)
+        
+        # Add our new columns
+        ordered_columns.extend(our_columns)
+        
+        # Write the CSV
         with open(output_file, 'w', newline='', encoding='utf-8') as outfile:
-            writer = csv.DictWriter(outfile, fieldnames=all_columns)
+            writer = csv.DictWriter(outfile, fieldnames=ordered_columns)
             writer.writeheader()
 
             for item in items:
-                row = {
-                    'original_shoe_name': item.shoe_name,
-                    'original_size': item.size,
+                row = {}
+                
+                # Add original data
+                for col in original_columns:
+                    if col in item.original_data:
+                        value = item.original_data[col]
+                        # Update condition with extracted notes if it's a condition column
+                        if 'condition' in col.lower():
+                            value = item.condition  # Use updated condition with notes
+                        row[col] = value
+                
+                # Add our new data
+                row.update({
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
                     'lowest_consigned': item.lowest_consigned or '',
@@ -1084,7 +1217,8 @@ class InventoryStockXAnalyzer:
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
                     'stockx_shoe_name': item.stockx_shoe_name or ''
-                }
+                })
+                
                 writer.writerow(row)
 
     def _looks_like_header_row(self, row: List[str]) -> bool:

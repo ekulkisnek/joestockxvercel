@@ -886,13 +886,34 @@ HTML_TEMPLATE = """
         
 
         <h3>�� Inventory Analysis</h3>
-        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
-            <input type="hidden" name="script_type" value="inventory">
-            <label for="inventory_upload">Upload inventory CSV file:</label><br>
-            <input type="file" name="file" id="inventory_upload" accept=".csv" style="margin: 5px 0;"><br>
-            <input type="submit" value="Upload & Run Inventory Analysis" class="upload-button">
-        </form>
-        <p><em>Analyze inventory CSV against StockX market data</em></p>
+        <!-- Upload CSV Option -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>📁 Upload CSV File</h4>
+            <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+                <input type="hidden" name="script_type" value="inventory">
+                <label for="inventory_upload">Upload inventory CSV file:</label><br>
+                <input type="file" name="file" id="inventory_upload" accept=".csv" style="margin: 5px 0;"><br>
+                <input type="submit" value="Upload & Run Inventory Analysis" class="upload-button">
+            </form>
+        </div>
+        
+        <!-- Paste List Option -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>📋 Paste Inventory List</h4>
+            <p><em>Copy your inventory from Excel/Google Sheets and paste it here</em></p>
+            <form action="/paste_inventory" method="post" style="margin: 10px 0;">
+                <label for="pasted_inventory">Paste your inventory list:</label><br>
+                <textarea name="inventory_text" id="pasted_inventory" rows="8" cols="60" 
+                         placeholder="Jordan 3 white cement 88 - size 11 ($460)
+Supreme air max 1 87 white - size 11.5x2, 12 ($210)
+Yeezy bone 500 - size 4.5x13, 5x9, 5.5x4 ($185)
+White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)"
+                         style="margin: 5px 0; width: 100%; font-family: monospace;"></textarea><br>
+                <input type="submit" value="Process Pasted Inventory" class="upload-button">
+            </form>
+        </div>
+        
+        <p><em>Both options analyze inventory against StockX market data with Alias pricing insights</em></p>
     </div>
     
     <div class="results-section">
@@ -1388,6 +1409,46 @@ def upload_file():
         flash('Invalid file type. Please upload a CSV file.')
         return redirect(url_for('index'))
 
+@app.route('/paste_inventory', methods=['POST'])
+def paste_inventory():
+    """Handle pasted inventory list - REQUIRES REAL AUTHENTICATION"""
+    inventory_text = request.form.get('inventory_text', '').strip()
+    
+    if not inventory_text:
+        flash('No inventory text provided')
+        return redirect(url_for('index'))
+    
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, recovery_action = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ PASTE PROCESSING BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+    
+    # Save pasted text to a temporary file
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{timestamp}_pasted_inventory.txt"
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(inventory_text)
+    
+    flash(f'Pasted inventory saved: {filename}')
+    
+    # Auto-run the script with pasted list option
+    script_id = f"paste_inventory_{datetime.now().strftime('%H%M%S')}"
+    command = f'python3 inventory_stockx_analyzer.py --list "../uploads/{filename}"'
+    working_dir = 'pricing_tools'
+    
+    # Start script in background thread
+    thread = threading.Thread(
+        target=run_script_async,
+        args=(script_id, command, working_dir)
+    )
+    thread.daemon = True
+    thread.start()
+    
+    return redirect(url_for('index'))
+
 @app.route('/downloads')
 def list_downloads():
     """List available output files for download"""
@@ -1444,7 +1505,7 @@ def list_downloads():
                     <th>Directory</th>
                     <th>Size</th>
                     <th>Modified</th>
-                    <th>Download</th>
+                    <th>Actions</th>
                 </tr>
                 {% for file in files %}
                 <tr>
@@ -1453,6 +1514,9 @@ def list_downloads():
                     <td>{{ "%.1f"|format(file.size/1024) }} KB</td>
                     <td>{{ file.modified }}</td>
                     <td>
+                        <a href="/view_csv/{{ file.path }}/{{ file.name }}" class="download-btn" style="background: #28a745; margin-right: 5px;">
+                            View
+                        </a>
                         <a href="/download/{{ file.path }}/{{ file.name }}" class="download-btn">
                             Download
                         </a>
@@ -1474,6 +1538,105 @@ def download_file(directory, filename):
         return send_from_directory(directory, filename, as_attachment=True)
     except FileNotFoundError:
         flash('File not found')
+        return redirect(url_for('list_downloads'))
+
+@app.route('/view_csv/<path:directory>/<filename>')
+def view_csv(directory, filename):
+    """View CSV file contents in browser"""
+    try:
+        import csv
+        filepath = os.path.join(directory, filename)
+        
+        if not os.path.exists(filepath):
+            flash('File not found')
+            return redirect(url_for('list_downloads'))
+        
+        # Read CSV data
+        csv_data = []
+        with open(filepath, 'r', encoding='utf-8') as file:
+            csv_reader = csv.reader(file)
+            for row in csv_reader:
+                csv_data.append(row)
+        
+        if not csv_data:
+            flash('Empty CSV file')
+            return redirect(url_for('list_downloads'))
+        
+        headers = csv_data[0] if csv_data else []
+        rows = csv_data[1:] if len(csv_data) > 1 else []
+        
+        # Limit rows for performance (show first 100 rows)
+        if len(rows) > 100:
+            rows = rows[:100]
+            truncated = True
+        else:
+            truncated = False
+        
+        return render_template_string("""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>View CSV: {{ filename }} - StockX Tools</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { border-collapse: collapse; width: 100%; font-size: 12px; }
+                th, td { padding: 8px; text-align: left; border: 1px solid #ddd; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                .back-btn { background: #007bff; color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; margin-bottom: 20px; display: inline-block; }
+                .download-btn { background: #28a745; color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; margin-left: 10px; }
+                .truncated-notice { background: #fff3cd; padding: 10px; border: 1px solid #ffeeba; border-radius: 4px; margin: 10px 0; }
+            </style>
+        </head>
+        <body>
+            <h1>📄 {{ filename }}</h1>
+            <a href="/downloads" class="back-btn">← Back to Downloads</a>
+            <a href="/download/{{ directory }}/{{ filename }}" class="download-btn">Download File</a>
+            
+            {% if truncated %}
+            <div class="truncated-notice">
+                <strong>Notice:</strong> Showing first 100 rows only. Download the full file to see all data.
+            </div>
+            {% endif %}
+            
+            <h3>File Info</h3>
+            <p><strong>Location:</strong> {{ directory }}/{{ filename }}</p>
+            <p><strong>Total Rows:</strong> {{ total_rows }}</p>
+            <p><strong>Columns:</strong> {{ headers|length }}</p>
+            
+            {% if headers %}
+            <h3>CSV Data</h3>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            {% for header in headers %}
+                            <th>{{ header }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            {% for cell in row %}
+                            <td title="{{ cell }}">{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>No data to display</p>
+            {% endif %}
+        </body>
+        </html>
+        """, filename=filename, directory=directory, headers=headers, rows=rows, 
+             truncated=truncated, total_rows=len(csv_data))
+        
+    except Exception as e:
+        flash(f'Error reading CSV file: {str(e)}')
         return redirect(url_for('list_downloads'))
 
 @app.route('/clear', methods=['POST'])
