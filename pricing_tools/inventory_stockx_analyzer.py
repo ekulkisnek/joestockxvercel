@@ -35,11 +35,16 @@ class InventoryItem:
         # StockX data
         self.stockx_bid = None
         self.stockx_ask = None
+        # Sales history data (new)
+        self.last5_avg_price = None
+        self.last5_avg_days = None
+        self.last5_price_range = None
+        self.last5_time_range = None
+        # Existing fields continued
         self.stockx_sku = None
         self.stockx_url = None
         self.stockx_size = None
         self.stockx_shoe_name = None
-        self.size_match_uncertain = False  # Flag for uncertain matches
 
         # Profit calculations
         self.bid_profit = None
@@ -313,7 +318,7 @@ class InventoryStockXAnalyzer:
             return []
 
     def find_variant_by_size(self, variants: List[Dict], target_size: str, size_category: str) -> Tuple[Optional[Dict], bool]:
-        """Find variant matching the target size, return (variant, is_uncertain)"""
+        """Find variant matching the target size"""
         target_size_clean = target_size.replace('.0', '').strip()
 
         # First try exact matches
@@ -331,39 +336,31 @@ class InventoryStockXAnalyzer:
                 if default_size == target_size or default_size == target_size_clean:
                     return variant, False
 
-        # If no exact match, try uncertain matches with size suffixes
-        return self._try_uncertain_size_match(variants, target_size_clean)
+        # Try extended matching with size suffixes (no longer marked as uncertain)
+        numeric_size = re.sub(r'[^0-9.]', '', target_size_clean)
+        if numeric_size:
+            # Try different size suffixes that might match
+            size_attempts = [
+                f"{numeric_size}Y",    # Youth/GS
+                f"{numeric_size}C",    # Child/PS  
+                f"{numeric_size}W",    # Women's
+                numeric_size,          # Plain numeric
+            ]
 
-    def _try_uncertain_size_match(self, variants: List[Dict], target_size: str) -> Tuple[Optional[Dict], bool]:
-        """Try uncertain size matching with different suffixes"""
+            for attempt_size in size_attempts:
+                for variant in variants:
+                    variant_value = str(variant.get('variantValue', '')).strip()
 
-        # Extract numeric part from target size
-        numeric_size = re.sub(r'[^0-9.]', '', target_size)
-        if not numeric_size:
-            return None, False
+                    if variant_value == attempt_size:
+                        return variant, False
 
-        # Try different size suffixes that might match
-        size_attempts = [
-            f"{numeric_size}Y",    # Youth/GS
-            f"{numeric_size}C",    # Child/PS  
-            f"{numeric_size}W",    # Women's
-            numeric_size,          # Plain numeric
-        ]
-
-        for attempt_size in size_attempts:
-            for variant in variants:
-                variant_value = str(variant.get('variantValue', '')).strip()
-
-                if variant_value == attempt_size:
-                    return variant, True  # Found but uncertain
-
-                # Also check default conversion
-                size_chart = variant.get('sizeChart', {})
-                default_conversion = size_chart.get('defaultConversion')
-                if default_conversion:
-                    default_size = str(default_conversion.get('size', '')).strip()
-                    if default_size == attempt_size:
-                        return variant, True  # Found but uncertain
+                    # Also check default conversion
+                    size_chart = variant.get('sizeChart', {})
+                    default_conversion = size_chart.get('defaultConversion')
+                    if default_conversion:
+                        default_size = str(default_conversion.get('size', '')).strip()
+                        if default_size == attempt_size:
+                            return variant, False
 
         return None, False
 
@@ -387,6 +384,107 @@ class InventoryStockXAnalyzer:
             print(f"   ❌ Market data error: {str(e)}")
             return None
 
+    def get_last_5_sales(self, product_id: str, variant_id: str) -> Optional[Dict]:
+        """Get last 5 sales for specific variant using orders history"""
+        try:
+            headers = self.client._get_headers()
+            response = requests.get(
+                f'https://stockx.com/api/selling/orders/history',
+                headers=headers,
+                params={
+                    'productId': product_id,
+                    'variantId': variant_id,
+                    'pageSize': 5
+                },
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                orders = data.get('orders', [])
+                
+                if not orders:
+                    print(f"   📊 No sales history found")
+                    return None
+                
+                # Calculate metrics
+                prices = []
+                dates = []
+                
+                for order in orders:
+                    amount = order.get('amount')
+                    created_at = order.get('createdAt')
+                    
+                    if amount and created_at:
+                        try:
+                            # Parse price (remove $ if present)
+                            price = float(str(amount).replace('$', '').replace(',', ''))
+                            prices.append(price)
+                            
+                            # Parse date
+                            from datetime import datetime
+                            date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            dates.append(date)
+                        except (ValueError, TypeError) as e:
+                            print(f"   ⚠️ Error parsing sales data: {e}")
+                            continue
+                
+                if not prices or not dates:
+                    print(f"   📊 No valid sales data found")
+                    return None
+                
+                # Calculate average price
+                avg_price = sum(prices) / len(prices)
+                
+                # Calculate price range
+                min_price = min(prices)
+                max_price = max(prices)
+                price_range = f"{min_price:.0f}-{max_price:.0f}"
+                
+                # Calculate time metrics (if we have multiple dates)
+                avg_days = None
+                time_range = None
+                
+                if len(dates) > 1:
+                    # Sort dates oldest to newest
+                    dates.sort()
+                    
+                    # Calculate average days between sales
+                    time_diffs = []
+                    for i in range(1, len(dates)):
+                        diff = (dates[i] - dates[i-1]).days
+                        time_diffs.append(diff)
+                    
+                    if time_diffs:
+                        avg_days = sum(time_diffs) / len(time_diffs)
+                    
+                    # Calculate time range (first to last)
+                    first_date = dates[0]
+                    last_date = dates[-1]
+                    total_days = (last_date - first_date).days
+                    time_range = f"0-{total_days}" if total_days > 0 else "0-0"
+                
+                print(f"   📊 Sales history: {len(orders)} sales, avg ${avg_price:.0f}, range {price_range}")
+                
+                return {
+                    'avg_price': avg_price,
+                    'avg_days': avg_days,
+                    'price_range': price_range,
+                    'time_range': time_range,
+                    'sales_count': len(orders)
+                }
+                
+            elif response.status_code == 429:
+                print(f"   ⚠️ Rate limited on sales history - will retry")
+                return "RATE_LIMITED"
+            else:
+                print(f"   ❌ Sales history error: {response.status_code}")
+                return None
+
+        except Exception as e:
+            print(f"   ❌ Sales history error: {str(e)}")
+            return None
+
     def search_stockx_for_item(self, item: InventoryItem) -> bool:
         """Search StockX for inventory item"""
         search_query = self.clean_shoe_name_for_search(item.shoe_name)
@@ -399,6 +497,13 @@ class InventoryStockXAnalyzer:
             if cached_result:
                 item.stockx_bid = f"${cached_result['bid']}" if cached_result['bid'] else None
                 item.stockx_ask = f"${cached_result['ask']}" if cached_result['ask'] else None
+                # Add cached sales data
+                if cached_result.get('last5_avg_price'):
+                    item.last5_avg_price = f"${cached_result['last5_avg_price']:.0f}"
+                if cached_result.get('last5_avg_days'):
+                    item.last5_avg_days = f"{cached_result['last5_avg_days']:.1f}"
+                item.last5_price_range = cached_result.get('last5_price_range')
+                item.last5_time_range = cached_result.get('last5_time_range')
                 item.stockx_sku = cached_result.get('sku')
                 item.stockx_url = cached_result.get('url')
                 item.stockx_size = cached_result.get('size')
@@ -440,7 +545,7 @@ class InventoryStockXAnalyzer:
                 return False
 
             # Find matching variant by size
-            matching_variant, is_uncertain = self.find_variant_by_size(variants, size_normalized, size_category)
+            matching_variant, _ = self.find_variant_by_size(variants, size_normalized, size_category)
 
             if not matching_variant:
                 print(f"   ❌ Size {size_normalized} not found", flush=True)
@@ -453,11 +558,7 @@ class InventoryStockXAnalyzer:
             variant_id = matching_variant['variantId']
             variant_size = matching_variant.get('variantValue', size_normalized)
 
-            if is_uncertain:
-                print(f"   🎯 Found variant: {variant_size} (ID: {variant_id[:8]}...) ⚠️ UNCERTAIN MATCH")
-                item.size_match_uncertain = True
-            else:
-                print(f"   🎯 Found variant: {variant_size} (ID: {variant_id[:8]}...)")
+            print(f"   🎯 Found variant: {variant_size} (ID: {variant_id[:8]}...)")
 
             # Get market data for the specific variant
             market_data = self.get_variant_market_data(best_product['id'], variant_id)
@@ -466,6 +567,13 @@ class InventoryStockXAnalyzer:
                 print("   ❌ No market data available")
                 self.cache[cache_key] = None
                 return False
+            
+            # Get last 5 sales data
+            sales_data = self.get_last_5_sales(best_product['id'], variant_id)
+            
+            # Handle rate limiting for sales data - return special code to trigger retry
+            if sales_data == "RATE_LIMITED":
+                return "RATE_LIMITED"
 
             # Extract pricing data
             bid_amount = market_data.get('highestBidAmount')
@@ -488,9 +596,14 @@ class InventoryStockXAnalyzer:
             if url_key:
                 stockx_url = f"https://stockx.com/{url_key}"
 
+            # Include sales data in result
             result = {
                 'bid': bid_amount,
                 'ask': ask_amount,
+                'last5_avg_price': sales_data.get('avg_price') if sales_data else None,
+                'last5_avg_days': sales_data.get('avg_days') if sales_data else None,
+                'last5_price_range': sales_data.get('price_range') if sales_data else None,
+                'last5_time_range': sales_data.get('time_range') if sales_data else None,
                 'sku': best_product.get('style_id', ''),
                 'url': stockx_url,
                 'size': str(variant_size),
@@ -501,6 +614,12 @@ class InventoryStockXAnalyzer:
 
             item.stockx_bid = f"${result['bid']}" if result['bid'] else None
             item.stockx_ask = f"${result['ask']}" if result['ask'] else None
+            # Add sales data to item
+            if sales_data:
+                item.last5_avg_price = f"${sales_data['avg_price']:.0f}" if sales_data.get('avg_price') else None
+                item.last5_avg_days = f"{sales_data['avg_days']:.1f}" if sales_data.get('avg_days') else None
+                item.last5_price_range = sales_data.get('price_range')
+                item.last5_time_range = sales_data.get('time_range')
             item.stockx_sku = result['sku']
             item.stockx_url = result['url']
             item.stockx_size = result['size']
@@ -511,10 +630,15 @@ class InventoryStockXAnalyzer:
             self.cache[cache_key] = result
 
             print(f"   💰 Bid: ${result['bid'] or 'N/A'} | Ask: ${result['ask'] or 'N/A'} | Size: {result['size']}", flush=True)
+            if sales_data:
+                print(f"   📊 Last 5: Avg ${sales_data['avg_price']:.0f}, Range {sales_data['price_range']}", flush=True)
             return True
 
         except Exception as e:
             print(f"   ❌ Error: {str(e)}")
+            # Check if this is a rate limiting error
+            if "429" in str(e):
+                return "RATE_LIMITED"
             self.cache[cache_key] = None
             return False
 
@@ -593,14 +717,36 @@ class InventoryStockXAnalyzer:
         for i, item in enumerate(items, 1):
             print(f"\n[{i}/{len(items)}] {item.shoe_name} - Size {item.size}", flush=True)
 
-            success = self.search_stockx_for_item(item)
-            if success:
-                self.matches_found += 1
+            # Retry logic for rate limiting
+            max_retries = 3
+            retry_count = 0
+            success = False
+            
+            while retry_count <= max_retries and not success:
+                result = self.search_stockx_for_item(item)
+                
+                if result == "RATE_LIMITED":
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        print(f"   ⏳ Rate limited! Waiting 2 seconds and retrying (attempt {retry_count}/{max_retries})...", flush=True)
+                        time.sleep(2.0)  # Wait the normal interval
+                    else:
+                        print(f"   ❌ Max retries reached for rate limiting - skipping item", flush=True)
+                        break
+                elif result:
+                    success = True
+                    self.matches_found += 1
+                    break
+                else:
+                    # Regular failure (not rate limited)
+                    break
 
             self.processed_count += 1
 
             # Optimal rate limiting based on testing: 2 seconds = 30 requests/min
-            time.sleep(2.0)
+            # (only sleep if we didn't already sleep due to rate limiting)
+            if not (result == "RATE_LIMITED" and retry_count > 0):
+                time.sleep(2.0)
 
             # Progress update every 5 items with time estimation
             if i % 5 == 0:
@@ -623,11 +769,12 @@ class InventoryStockXAnalyzer:
         return output_file
 
     def _write_enhanced_csv(self, items: List[InventoryItem], output_file: str):
-        """Write enhanced CSV"""
+        """Write enhanced CSV with sales history data"""
         base_columns = ['original_shoe_name', 'original_size', 'original_price', 'condition']
         profit_columns = ['bid_profit', 'ask_profit']
-        stockx_columns = ['stockx_bid', 'stockx_ask', 'stockx_sku', 'stockx_url', 
-                         'stockx_size', 'size_match_uncertain', 'stockx_shoe_name']
+        stockx_columns = ['stockx_bid', 'stockx_ask', 
+                         'last5_avg_price', 'last5_avg_days', 'last5_price_range', 'last5_time_range',
+                         'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name']
 
         all_columns = base_columns + profit_columns + stockx_columns
 
@@ -645,10 +792,13 @@ class InventoryStockXAnalyzer:
                     'ask_profit': item.ask_profit or '',
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
+                    'last5_avg_price': item.last5_avg_price or '',
+                    'last5_avg_days': item.last5_avg_days or '',
+                    'last5_price_range': item.last5_price_range or '',
+                    'last5_time_range': item.last5_time_range or '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
-                    'size_match_uncertain': 'YES' if item.size_match_uncertain else '',
                     'stockx_shoe_name': item.stockx_shoe_name or ''
                 }
                 writer.writerow(row)
