@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 🌐 Minimal Flask Web UI for StockX Tools
@@ -885,15 +884,7 @@ HTML_TEMPLATE = """
     <div class="upload-section">
         <h2>📊 Bulk Analysis Tools</h2>
         
-        <h3>💰 eBay Price Comparison</h3>
-        <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
-            <input type="hidden" name="script_type" value="ebay">
-            <label for="ebay_upload">Upload eBay CSV file:</label><br>
-            <input type="file" name="file" id="ebay_upload" accept=".csv" style="margin: 5px 0;"><br>
-            <input type="submit" value="Upload & Run eBay Analysis" class="upload-button">
-        </form>
-        <p><em>Compare eBay auction data with StockX prices</em></p>
-        
+
         <h3>�� Inventory Analysis</h3>
         <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
             <input type="hidden" name="script_type" value="inventory">
@@ -908,8 +899,7 @@ HTML_TEMPLATE = """
         <h2>📁 Results & Downloads</h2>
         <p><strong>Your processed files are saved in these locations:</strong></p>
         <ul>
-            <li><strong>uploads/</strong> - Your uploaded files</li>
-            <li><strong>ebay_tools/</strong> - eBay analysis results</li>
+            <li><strong>uploads/</strong> - Your uploaded CSV files</li>
             <li><strong>pricing_tools/</strong> - Inventory analysis results</li>
         </ul>
         <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">View & Download All Results</a></p>
@@ -1378,10 +1368,7 @@ def upload_file():
         # Auto-run the script with uploaded file
         script_id = f"{script_type}_{datetime.now().strftime('%H%M%S')}"
         
-        if script_type == 'ebay':
-            command = f'python3 ebay_stockxpricing.py "../uploads/{filename}"'
-            working_dir = 'ebay_tools'
-        elif script_type == 'inventory':
+        if script_type == 'inventory':
             command = f'python3 inventory_stockx_analyzer.py "../uploads/{filename}"'
             working_dir = 'pricing_tools'
         else:
@@ -1404,7 +1391,7 @@ def upload_file():
 @app.route('/downloads')
 def list_downloads():
     """List available output files for download"""
-    download_dirs = ['ebay_tools', 'pricing_tools', 'uploads']
+    download_dirs = ['pricing_tools', 'uploads']
     files = []
     
     for directory in download_dirs:
@@ -1446,7 +1433,6 @@ def list_downloads():
         <h2>📍 File Locations</h2>
         <ul>
             <li><strong>uploads/</strong> - Your uploaded CSV files</li>
-            <li><strong>ebay_tools/</strong> - eBay price comparison results</li>
             <li><strong>pricing_tools/</strong> - Inventory analysis results</li>
         </ul>
         

@@ -72,8 +72,29 @@ class InventoryStockXAnalyzer:
         """Parse CSV file flexibly - handles multiple formats"""
         items = []
 
-        with open(csv_file, 'r', encoding='utf-8') as file:
-            lines = list(csv.reader(file))
+        # First, try to read as CSV - if it fails, treat as pasted list
+        try:
+            with open(csv_file, 'r', encoding='utf-8') as file:
+                content = file.read().strip()
+                
+            # Check if this looks like a pasted list format rather than CSV
+            # Indicators: contains " - size " patterns and prices in parentheses
+            if (('- size' in content or ' size ' in content) and 
+                '(' in content and '$' in content and 
+                ',' not in content[:100]):  # First 100 chars shouldn't have CSV commas
+                
+                print("📋 Detected pasted list format - using specialized parser")
+                return self.parse_pasted_list(content)
+            
+            # Otherwise parse as CSV
+            lines = list(csv.reader(content.splitlines()))
+            
+        except Exception as e:
+            print(f"⚠️ Error reading file as CSV, trying as pasted text: {e}")
+            # If CSV parsing fails, try as pasted list
+            with open(csv_file, 'r', encoding='utf-8') as file:
+                content = file.read().strip()
+            return self.parse_pasted_list(content)
 
         current_shoe = None
 
@@ -103,57 +124,164 @@ class InventoryStockXAnalyzer:
                     elif self._looks_like_price(cell) and not price:
                         price = cell
 
+                item = InventoryItem(shoe_name, size, price, condition)
+                items.append(item)
+
+            # Format 2: Group header with sizes below
+            elif self._looks_like_shoe_name(first_cell) and len(row) <= 2:
+                current_shoe = first_cell
+                # Check if there's additional data in the same row
+                if len(row) > 1 and row[1].strip():
+                    # This might be price info like "Nike Dunk Low Blueberry,60"
+                    price_candidate = row[1].strip()
+                    if self._looks_like_price(price_candidate):
+                        # This row has shoe name and price, sizes will be below
+                        continue
+
+            # Format 3: Size row under group header  
+            elif current_shoe and self._looks_like_size_row(row):
+                for cell in row:
+                    cell = cell.strip()
+                    if self._looks_like_size(cell):
+                        condition = ""
+                        price = ""
+                        
+                        # Look for condition and price in the same row
+                        for other_cell in row:
+                            other_cell = other_cell.strip()
+                            if other_cell != cell:  # Don't re-process the size cell
+                                if self._looks_like_condition(other_cell) and not condition:
+                                    condition = other_cell
+                                elif self._looks_like_price(other_cell) and not price:
+                                    price = other_cell
+
+                        item = InventoryItem(current_shoe, cell, price, condition)
+                        items.append(item)
+
+            # Format 4: Standard CSV with headers
+            elif i == 0 and self._looks_like_header_row(row):
+                # This is a header row, skip it
+                continue
+            elif i > 0 and len(row) >= 2:
+                # Standard CSV format: shoe_name, size, condition, price (flexible order)
+                shoe_name = first_cell
+                size = ""
+                condition = ""
+                price = ""
+
+                for cell in row[1:]:  # Skip first cell (shoe name)
+                    cell = cell.strip()
+                    if not cell:
+                        continue
+                    
+                    if self._looks_like_size(cell) and not size:
+                        size = cell
+                    elif self._looks_like_condition(cell) and not condition:
+                        condition = cell
+                    elif self._looks_like_price(cell) and not price:
+                        price = cell
+
                 if shoe_name:  # Only add if we have a shoe name
-                    items.append(InventoryItem(
+                    item = InventoryItem(shoe_name, size, price, condition)
+                    items.append(item)
+
+        return items
+
+    def parse_pasted_list(self, text: str) -> List[InventoryItem]:
+        """Parse pasted list format like 'Jordan 3 white cement 88 - size 11 ($460)'"""
+        items = []
+        
+        # Split by lines and clean up
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        for line in lines:
+            # Skip header lines or empty lines
+            if not line or line.upper().startswith('SHOE LIST') or line.startswith('='):
+                continue
+            
+            # Parse each line using regex
+            # Pattern: shoe_name - size size_info (price) [optional notes]
+            import re
+            
+            # First try to find the price in parentheses
+            price_match = re.search(r'\(\$?(\d+(?:\.\d{2})?)\)', line)
+            price = price_match.group(1) if price_match else ""
+            
+            # Remove price and any notes after it
+            line_without_price = re.sub(r'\(\$?\d+(?:\.\d{2})?\).*$', '', line).strip()
+            
+            # Find size information - look for "size" or "- size"
+            size_pattern = r'(?:-\s*)?size\s+(.*?)(?:\s*\(|$)'
+            size_match = re.search(size_pattern, line_without_price, re.IGNORECASE)
+            
+            if not size_match:
+                print(f"⚠️ Could not parse size from: {line}")
+                continue
+                
+            size_info = size_match.group(1).strip()
+            
+            # Extract shoe name (everything before the size part)
+            shoe_name = re.sub(size_pattern, '', line_without_price, flags=re.IGNORECASE).strip()
+            # Clean up trailing dashes or spaces
+            shoe_name = re.sub(r'\s*-\s*$', '', shoe_name).strip()
+            
+            # Parse sizes - handle complex formats like "11.5x2, 12" or "4.5x13, 5x9, 5.5x4"
+            sizes = self._parse_size_list(size_info)
+            
+            # Create items for each size
+            for size, quantity in sizes:
+                # Determine condition based on context
+                condition = "Brand New"  # Default for DS (deadstock)
+                if "used" in line.lower():
+                    condition = "Used"
+                elif "vnds" in line.lower():
+                    condition = "Very Near Deadstock"
+                
+                item = InventoryItem(
+                    shoe_name=shoe_name,
+                    size=size,
+                    price=price,
+                    condition=condition
+                )
+                items.append(item)
+                
+                # If quantity > 1, add multiple entries
+                for _ in range(quantity - 1):
+                    duplicate_item = InventoryItem(
                         shoe_name=shoe_name,
                         size=size,
                         price=price,
                         condition=condition
-                    ))
-
-            # Format 2: Traditional format - shoe name in one row, sizes/prices below
-            elif self._looks_like_shoe_name(first_cell):
-                current_shoe = first_cell
-
-                # Check if this row also contains size and price
-                if len(row) > 1:
-                    size = ""
-                    price = ""
-
-                    for j in range(1, len(row)):
-                        cell = row[j].strip() if row[j] else ""
-                        if self._looks_like_size(cell) and not size:
-                            size = cell
-                        elif self._looks_like_price(cell) and not price:
-                            price = cell
-
-                    if size:  # If we found size in the same row
-                        items.append(InventoryItem(
-                            shoe_name=current_shoe,
-                            size=size,
-                            price=price
-                        ))
-
-            # Format 2 continued: Size/price rows under shoe name
-            elif self._looks_like_size(first_cell) and current_shoe:
-                size = first_cell
-                price = ""
-
-                # Look for price in this row
-                for j in range(1, len(row)):
-                    cell = row[j].strip() if row[j] else ""
-                    if self._looks_like_price(cell):
-                        price = cell
-                        break
-
-                items.append(InventoryItem(
-                    shoe_name=current_shoe,
-                    size=size,
-                    price=price
-                ))
-
-        print(f"✅ Parsed {len(items)} inventory items")
+                    )
+                    items.append(duplicate_item)
+        
         return items
+    
+    def _parse_size_list(self, size_info: str) -> List[Tuple[str, int]]:
+        """Parse size list like '11.5x2, 12' or '4.5x13, 5x9, 5.5x4' into (size, quantity) pairs"""
+        sizes = []
+        
+        # Split by commas
+        size_parts = [part.strip() for part in size_info.split(',')]
+        
+        for part in size_parts:
+            # Handle formats like "11.5x2" or just "11"
+            if 'x' in part:
+                # Format: 11.5x2
+                size_str, qty_str = part.split('x', 1)
+                size = size_str.strip()
+                try:
+                    quantity = int(qty_str.strip())
+                except ValueError:
+                    quantity = 1
+            else:
+                # Just a size like "11" or "11.5"
+                size = part.strip()
+                quantity = 1
+            
+            sizes.append((size, quantity))
+        
+        return sizes
 
     def _is_complete_item_row(self, row: List[str]) -> bool:
         """Check if this row contains a complete item (Format 1)"""
@@ -385,16 +513,17 @@ class InventoryStockXAnalyzer:
             return None
 
     def get_last_5_sales(self, product_id: str, variant_id: str) -> Optional[Dict]:
-        """Get last 5 sales for specific variant using orders history"""
+        """Get last 5 sales for specific variant using the correct orders history endpoint"""
         try:
             headers = self.client._get_headers()
             response = requests.get(
-                f'https://stockx.com/api/selling/orders/history',
+                f'{self.client.base_url}/selling/orders/history',
                 headers=headers,
                 params={
                     'productId': product_id,
                     'variantId': variant_id,
-                    'pageSize': 5
+                    'pageSize': 5,
+                    'orderStatus': 'COMPLETED'  # Only get completed sales
                 },
                 timeout=15
             )
@@ -407,7 +536,7 @@ class InventoryStockXAnalyzer:
                     print(f"   📊 No sales history found")
                     return None
                 
-                # Calculate metrics
+                # Calculate metrics from the orders
                 prices = []
                 dates = []
                 
@@ -417,11 +546,11 @@ class InventoryStockXAnalyzer:
                     
                     if amount and created_at:
                         try:
-                            # Parse price (remove $ if present)
+                            # Parse price (amount is already a string number)
                             price = float(str(amount).replace('$', '').replace(',', ''))
                             prices.append(price)
                             
-                            # Parse date
+                            # Parse date (ISO 8601 format like "2021-08-25T13:51:47.000Z")
                             from datetime import datetime
                             date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
                             dates.append(date)
@@ -477,6 +606,9 @@ class InventoryStockXAnalyzer:
             elif response.status_code == 429:
                 print(f"   ⚠️ Rate limited on sales history - will retry")
                 return "RATE_LIMITED"
+            elif response.status_code == 403:
+                print(f"   ⚠️ Sales history access forbidden (403) - may need seller permissions")
+                return None
             else:
                 print(f"   ❌ Sales history error: {response.status_code}")
                 return None
@@ -769,14 +901,15 @@ class InventoryStockXAnalyzer:
         return output_file
 
     def _write_enhanced_csv(self, items: List[InventoryItem], output_file: str):
-        """Write enhanced CSV with sales history data"""
-        base_columns = ['original_shoe_name', 'original_size', 'original_price', 'condition']
-        profit_columns = ['bid_profit', 'ask_profit']
-        stockx_columns = ['stockx_bid', 'stockx_ask', 
-                         'last5_avg_price', 'last5_avg_days', 'last5_price_range', 'last5_time_range',
-                         'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name']
-
-        all_columns = base_columns + profit_columns + stockx_columns
+        """Write enhanced CSV with reordered columns"""
+        # Column order: basic info, then bid/ask prices, then everything else
+        all_columns = [
+            'original_shoe_name', 'original_size', 'original_price', 'condition',
+            'stockx_bid', 'stockx_ask',
+            'bid_profit', 'ask_profit',
+            'last5_avg_price', 'last5_avg_days', 'last5_price_range', 'last5_time_range',
+            'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
+        ]
 
         with open(output_file, 'w', newline='', encoding='utf-8') as outfile:
             writer = csv.DictWriter(outfile, fieldnames=all_columns)
