@@ -14,6 +14,15 @@ import requests
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+except ImportError:
+    try:
+        import pytz
+        ZoneInfo = None
+    except ImportError:
+        pytz = None
+        ZoneInfo = None
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -157,9 +166,38 @@ class InventoryStockXAnalyzer:
             else:
                 date_obj = datetime.fromisoformat(date_string)
             
-            # Calculate days difference from today
-            today = datetime.now(date_obj.tzinfo) if date_obj.tzinfo else datetime.now()
-            days_diff = (today - date_obj).days
+            # Convert to US Central time
+            central_now = None
+            date_central = None
+            
+            if ZoneInfo:
+                # Use zoneinfo (Python 3.9+)
+                central_tz = ZoneInfo('US/Central')
+                central_now = datetime.now(central_tz)
+                if date_obj.tzinfo:
+                    date_central = date_obj.astimezone(central_tz)
+                else:
+                    date_central = date_obj
+            elif pytz:
+                # Use pytz fallback
+                central_tz = pytz.timezone('US/Central')
+                central_now = datetime.now(central_tz)
+                if date_obj.tzinfo:
+                    date_central = date_obj.astimezone(central_tz)
+                else:
+                    date_central = date_obj
+            else:
+                # No timezone library available
+                central_now = datetime.now()
+                date_central = date_obj
+            
+            # Calculate days difference from today in Central time
+            if central_now and date_central:
+                days_diff = (central_now.date() - date_central.date()).days
+            else:
+                # Fallback calculation
+                today = datetime.now(date_obj.tzinfo) if date_obj.tzinfo else datetime.now()
+                days_diff = (today - date_obj).days
             
             # Return just the number
             return str(days_diff)
@@ -1050,9 +1088,55 @@ class InventoryStockXAnalyzer:
     def _looks_like_sku(self, text: str) -> bool:
         """Check if text looks like a SKU"""
         # SKUs are typically short alphanumeric codes
-        return (len(text) >= 4 and len(text) <= 25 and 
-                bool(re.match(r'^[A-Za-z0-9\s\-]+$', text)) and
-                not any(word in text.lower() for word in ['jordan', 'nike', 'air', 'dunk', 'yeezy']))
+        if not (4 <= len(text) <= 25):
+            return False
+            
+        # Must be mostly alphanumeric with limited special chars
+        if not re.match(r'^[A-Za-z0-9\s\-]+$', text):
+            return False
+            
+        # Should have at least some letters and numbers
+        has_letters = bool(re.search(r'[A-Za-z]', text))
+        has_numbers = bool(re.search(r'\d', text))
+        if not (has_letters and has_numbers):
+            return False
+            
+        # If it contains many obvious shoe terms, it's probably not a SKU
+        # But allow single short terms that might be in SKUs
+        shoe_terms = ['jordan', 'nike', 'air force', 'dunk low', 'yeezy', 'adidas', 'retro', 'high og', 'low og']
+        text_lower = text.lower()
+        if any(term in text_lower for term in shoe_terms):
+            return False
+            
+        # If it has descriptive words, it's probably not a SKU
+        descriptive_words = ['travis', 'canary', 'royal', 'cement', 'fire', 'red', 'navy', 'champion', 'mauve']
+        word_count = sum(1 for word in descriptive_words if word in text_lower)
+        if word_count >= 2:  # Multiple descriptive words = not a SKU
+            return False
+            
+        # If it has size indicators at the end, it's not a pure SKU
+        if re.search(r'\s+\d+(?:\.\d+)?[mwcy]\s*$', text_lower):
+            return False
+            
+        # If it has obvious condition terms, it's not a SKU
+        condition_terms = ['ds', 'vnds', 'og all', 'nb', 'used']
+        if any(term in text_lower for term in condition_terms):
+            return False
+            
+        # If it's mostly just letters and numbers in a pattern, it's likely a SKU
+        # Common SKU patterns: AB1234, AB1234-567, AB1234 567
+        sku_patterns = [
+            r'^[A-Z]{1,3}\d{4,6}$',           # AB1234
+            r'^[A-Z]{1,3}\d{4,6}[\s\-]\d{2,4}$',  # AB1234-567 or AB1234 567
+            r'^[A-Z0-9]{4,12}$',              # Mixed alphanumeric
+        ]
+        
+        text_clean = text.replace(' ', '').replace('-', '')
+        for pattern in sku_patterns:
+            if re.match(pattern, text_clean, re.IGNORECASE):
+                return True
+        
+        return False
     
     def _clean_sku_for_alias_search(self, sku: str) -> str:
         """Clean SKU for better Alias search results"""
@@ -1382,7 +1466,11 @@ class InventoryStockXAnalyzer:
                 stockx_sku = result['sku']
                 alias_sku = alias_data.get('alias_sku', '')
                 if stockx_sku and alias_sku:
-                    if stockx_sku.upper() == alias_sku.upper():
+                    # Normalize both SKUs for comparison (remove dashes, spaces, make uppercase)
+                    stockx_normalized = re.sub(r'[-\s]', '', stockx_sku.upper())
+                    alias_normalized = re.sub(r'[-\s]', '', alias_sku.upper())
+                    
+                    if stockx_normalized == alias_normalized:
                         print(f"   ✅ SKU Match Verified: {stockx_sku}", flush=True)
                     else:
                         print(f"   ⚠️  SKU Mismatch: StockX({stockx_sku}) vs Alias({alias_sku})", flush=True)
