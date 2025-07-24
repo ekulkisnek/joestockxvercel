@@ -35,6 +35,9 @@ class InventoryItem:
         # Store original CSV data to preserve all columns
         self.original_data = original_data or {}
         
+        # Add quantity tracking
+        self.quantity = 1  # Default quantity
+        
         # Extract and append condition notes from shoe name
         self.condition_notes = self._extract_condition_notes(self.shoe_name)
         if self.condition_notes and self.condition:
@@ -362,7 +365,7 @@ class InventoryStockXAnalyzer:
         # Create items for each size/quantity combination
         items = []
         for size, quantity in size_info:
-            for _ in range(quantity):
+            for q in range(quantity):
                 item = InventoryItem(
                     shoe_name=potential_sku,  # Use SKU as shoe name for searching
                     size=size,
@@ -371,6 +374,8 @@ class InventoryStockXAnalyzer:
                 )
                 # Mark this as a SKU search for later processing
                 item.is_sku_search = True
+                # Track original quantity for this size
+                item.quantity = quantity
                 items.append(item)
         
         print(f"   ✅ Parsed SKU: {potential_sku} - {len(items)} items")
@@ -424,19 +429,17 @@ class InventoryStockXAnalyzer:
         items = []
         for size, quantity in size_info:
             # Determine condition based on context
-            condition = "Brand New"  # Default for DS (deadstock)
-            if "used" in line.lower():
-                condition = "Used"
-            elif "vnds" in line.lower():
-                condition = "Very Near Deadstock"
+            condition = self._determine_condition(line)
             
-            for _ in range(quantity):
+            for q in range(quantity):
                 item = InventoryItem(
                     shoe_name=shoe_name,
                     size=size,
                     price=price,
                     condition=condition
                 )
+                # Track original quantity for this size
+                item.quantity = quantity
                 items.append(item)
         
         print(f"   ✅ Parsed: '{shoe_name}' - {len(items)} items - ${price}")
@@ -559,13 +562,14 @@ class InventoryStockXAnalyzer:
                 if self._is_reasonable_shoe_size(potential_size):
                     text_clean = re.sub(pattern, '', text_clean).strip()
         
-        # Remove common condition/quality indicators from end
+        # Remove common condition/quality indicators from end - but be more specific
         condition_patterns = [
-            r'\s*DS\s*OG\s*ALL\s*$',
-            r'\s*DS\s*$',
-            r'\s*OG\s*ALL\s*$',
-            r'\s*VNDS\s*$',
-            r'\s*NB\s*$',  # No box
+            r'\s+DS\s+OG\s+ALL\s*$',         # "DS OG ALL" at end
+            r'\s+VNDS\s+OG\s+ALL\s*$',       # "VNDS OG ALL" at end  
+            r'\s+DS\s*$',                    # "DS" at end
+            r'\s+VNDS\s*$',                  # "VNDS" at end
+            r'\s+NB\s*$',                    # "NB" (no box) at end
+            r'\s+OG\s+ALL\s*$',              # "OG ALL" at end
         ]
         
         for pattern in condition_patterns:
@@ -580,14 +584,17 @@ class InventoryStockXAnalyzer:
         """Determine condition from line text"""
         line_lower = line.lower()
         
-        if 'ds' in line_lower:
-            return "Brand New"  # Deadstock
-        elif 'vnds' in line_lower:
+        # Check for specific condition indicators
+        if 'vnds' in line_lower:
             return "Very Near Deadstock"
+        elif 'ds' in line_lower:
+            return "Brand New"  # Deadstock
         elif 'used' in line_lower:
             return "Used"
+        elif 'worn' in line_lower:
+            return "Used"
         elif 'nb' in line_lower or 'no box' in line_lower:
-            return "Brand New"  # No box but still new
+            return "Brand New (No Box)"  # No box but still new
         else:
             return "Brand New"  # Default assumption
 
@@ -857,39 +864,72 @@ class InventoryStockXAnalyzer:
             
             # Parse size to float
             try:
-                size_float = float(size.replace('Y', '').replace('W', ''))
+                size_float = float(size.replace('Y', '').replace('W', '').replace('C', ''))
             except (ValueError, AttributeError):
                 size_float = 10.0  # Default size if parsing fails
             
-            # Step 1: Search for the shoe in Alias catalog
+            # Step 1: Search for the shoe in Alias catalog with multiple strategies
+            alias_sku = None
+            catalog_id = None
+            alias_name = None
+            
+            # Strategy 1: Direct search with original name
             print(f"   🔍 Searching Alias for: {shoe_name}")
-            search_response = requests.get(
-                f"{base_url}/catalog",
-                headers=headers,
-                params={'query': shoe_name, 'limit': 1},
-                timeout=15
-            )
+            search_data = self._try_alias_search(base_url, headers, shoe_name)
             
-            if search_response.status_code != 200:
-                print(f"   ❌ Alias search failed: {search_response.status_code}")
-                return None
+            if search_data and search_data.get('catalog_items'):
+                catalog_item = search_data['catalog_items'][0]
+                catalog_id = catalog_item.get('catalog_id')
+                alias_name = catalog_item.get('name', 'Unknown')
                 
-            search_data = search_response.json()
-            catalog_items = search_data.get('catalog_items', [])
+                # Try multiple fields for SKU extraction
+                alias_sku = (catalog_item.get('sku') or 
+                           catalog_item.get('style_id') or 
+                           catalog_item.get('style_code') or 
+                           catalog_item.get('product_id') or 
+                           catalog_item.get('model_number') or 
+                           '')
+                
+                print(f"   ✅ Found Alias match: {alias_name}")
+                if alias_sku:
+                    print(f"   📋 Alias SKU: {alias_sku}")
             
-            if not catalog_items:
+            # Strategy 2: If no match and this looks like a SKU, try cleaning it
+            if not catalog_id and self._looks_like_sku(shoe_name):
+                cleaned_sku = self._clean_sku_for_alias_search(shoe_name)
+                if cleaned_sku != shoe_name:
+                    print(f"   🔍 Trying cleaned SKU: {cleaned_sku}")
+                    search_data = self._try_alias_search(base_url, headers, cleaned_sku)
+                    
+                    if search_data and search_data.get('catalog_items'):
+                        catalog_item = search_data['catalog_items'][0]
+                        catalog_id = catalog_item.get('catalog_id')
+                        alias_name = catalog_item.get('name', 'Unknown')
+                        alias_sku = (catalog_item.get('sku') or 
+                                   catalog_item.get('style_id') or 
+                                   catalog_item.get('style_code') or 
+                                   '')
+                        print(f"   ✅ Found Alias match with cleaned SKU: {alias_name}")
+            
+            # Strategy 3: If still no match and we have a SKU with spaces, try with dashes
+            if not catalog_id and ' ' in shoe_name:
+                sku_with_dash = shoe_name.replace(' ', '-')
+                print(f"   🔍 Trying SKU with dash: {sku_with_dash}")
+                search_data = self._try_alias_search(base_url, headers, sku_with_dash)
+                
+                if search_data and search_data.get('catalog_items'):
+                    catalog_item = search_data['catalog_items'][0]
+                    catalog_id = catalog_item.get('catalog_id')
+                    alias_name = catalog_item.get('name', 'Unknown')
+                    alias_sku = (catalog_item.get('sku') or 
+                               catalog_item.get('style_id') or 
+                               catalog_item.get('style_code') or 
+                               '')
+                    print(f"   ✅ Found Alias match with dash: {alias_name}")
+            
+            if not catalog_id:
                 print(f"   ❌ No Alias catalog match found")
                 return None
-            
-            catalog_id = catalog_items[0].get('catalog_id')
-            alias_sku = catalog_items[0].get('style_id', '')  # Get SKU from Alias
-            if not catalog_id:
-                print(f"   ❌ No catalog ID found")
-                return None
-            
-            print(f"   ✅ Found Alias match: {catalog_items[0].get('name', 'Unknown')}")
-            if alias_sku:
-                print(f"   📋 Alias SKU: {alias_sku}")
             
             # Step 2: Get pricing data with all the requested parameters
             params = {
@@ -986,6 +1026,44 @@ class InventoryStockXAnalyzer:
         except Exception as e:
             print(f"   ❌ Alias API error: {str(e)}")
             return None
+    
+    def _try_alias_search(self, base_url: str, headers: Dict, query: str) -> Optional[Dict]:
+        """Try to search Alias API with a given query"""
+        try:
+            search_response = requests.get(
+                f"{base_url}/catalog",
+                headers=headers,
+                params={'query': query, 'limit': 1},
+                timeout=15
+            )
+            
+            if search_response.status_code == 200:
+                return search_response.json()
+            else:
+                print(f"   ⚠️ Alias search failed for '{query}': {search_response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"   ⚠️ Alias search error for '{query}': {e}")
+            return None
+    
+    def _looks_like_sku(self, text: str) -> bool:
+        """Check if text looks like a SKU"""
+        # SKUs are typically short alphanumeric codes
+        return (len(text) >= 4 and len(text) <= 25 and 
+                bool(re.match(r'^[A-Za-z0-9\s\-]+$', text)) and
+                not any(word in text.lower() for word in ['jordan', 'nike', 'air', 'dunk', 'yeezy']))
+    
+    def _clean_sku_for_alias_search(self, sku: str) -> str:
+        """Clean SKU for better Alias search results"""
+        # Remove extra spaces and normalize
+        cleaned = re.sub(r'\s+', ' ', sku.strip())
+        
+        # Try removing spaces entirely
+        if ' ' in cleaned:
+            return cleaned.replace(' ', '')
+        
+        return cleaned
 
     def search_stockx_for_item(self, item: InventoryItem) -> bool:
         """Search StockX for inventory item"""
@@ -1487,9 +1565,10 @@ class InventoryStockXAnalyzer:
         
         # Define our new columns that we want to add
         our_columns = [
-            'stockx_bid', 'stockx_ask',
+            'quantity', 'condition', 'stockx_bid', 'stockx_ask',
             'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
+            'consignment_price', 'ship_to_verify_price',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
         
@@ -1555,6 +1634,8 @@ class InventoryStockXAnalyzer:
                 
                 # Add our new data
                 row.update({
+                    'quantity': item.quantity,
+                    'condition': item.condition,
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
                     'lowest_consigned': item.lowest_consigned or '',
@@ -1563,6 +1644,8 @@ class InventoryStockXAnalyzer:
                     'lowest_with_you': item.lowest_with_you or '',
                     'last_with_you_price': item.last_with_you_price or '',
                     'last_with_you_date': item.last_with_you_date or '',
+                    'consignment_price': item.consignment_price or '',
+                    'ship_to_verify_price': item.ship_to_verify_price or '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
