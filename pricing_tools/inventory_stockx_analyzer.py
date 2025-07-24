@@ -271,7 +271,7 @@ class InventoryStockXAnalyzer:
         return shoe_col, size_col, price_col, condition_col
 
     def parse_pasted_list(self, text: str) -> List[InventoryItem]:
-        """Parse pasted list format - handles both single line and multi-line formats"""
+        """Parse pasted list format - handles multiple inventory formats flexibly"""
         import re
         items = []
         
@@ -281,144 +281,315 @@ class InventoryStockXAnalyzer:
         # Remove header if present
         text = re.sub(r'^SHOE LIST[^)]*\)', '', text, flags=re.IGNORECASE).strip()
         
-        # Split into individual shoe entries
-        # Handle both multi-line and single-line formats
-        
-        # First, let's try splitting by lines (if they exist)
-        if '\n' in text and len(text.split('\n')) > 2:
-            # Multi-line format
+        # Split into individual lines (handles both multi-line and properly formatted lists)
+        lines = []
+        if '\n' in text:
+            # Multi-line format - simple line splitting
             lines = [line.strip() for line in text.split('\n') if line.strip()]
         else:
-            # Single line format - split by price patterns
-            # Look for closing parenthesis followed by space and capital letter
-            lines = []
-            
-            # Simple approach: split on ") " followed by capital letter
-            parts = re.split(r'\)\s+(?=[A-Z])', text)
-            
-            for i, part in enumerate(parts):
-                if part.strip():
-                    # Add back the closing parenthesis except for the last part
-                    if i < len(parts) - 1:
-                        lines.append(part.strip() + ')')
-                    else:
-                        lines.append(part.strip())
-            
-            # If that didn't work well, try a different approach
-            if len(lines) < 3:
-                # More aggressive pattern: look for price patterns
-                # Split on patterns like "($XXX) Some Brand"
-                pattern = r'\(\$?\d+(?:\.\d{2})?\)\s*(?=[A-Z][a-z])'
-                parts = re.split(pattern, text)
-                
-                # Find the prices that were split out
-                prices = re.findall(r'\(\$?\d+(?:\.\d{2})?\)', text)
-                
-                lines = []
-                for i, part in enumerate(parts):
-                    if part.strip():
-                        if i < len(prices):
-                            lines.append(part.strip() + ' ' + prices[i])
-                        else:
-                            lines.append(part.strip())
+            # Single line format - try to split intelligently
+            # For now, assume single line means it's already one item
+            lines = [text.strip()] if text.strip() else []
         
         print(f"📋 Split into {len(lines)} potential shoe entries")
         
         for i, line in enumerate(lines):
-            if not line or len(line) < 10:  # Skip very short lines
+            if not line or len(line) < 5:  # Skip very short lines
                 continue
             
             # Skip header lines
-            if any(skip in line.upper() for skip in ['SHOE LIST', 'TAKE ALL ONLY']):
+            if any(skip in line.upper() for skip in ['SHOE LIST', 'TAKE ALL ONLY', 'QUANTITY', 'SIZE']):
                 continue
             
             print(f"   Processing line {i+1}: {line[:60]}...")
             
-            # Parse each line using regex
+            # Try to parse the line using multiple strategies
+            parsed_item = self._parse_inventory_line(line)
             
-            # Find the price in parentheses - should be at the end
-            price_match = re.search(r'\(\$?(\d+(?:\.\d{2})?)\)', line)
-            price = price_match.group(1) if price_match else ""
-            
-            if not price:
-                print(f"   ⚠️ No price found in: {line[:50]}...")
-                continue
-            
-            # Remove price and any notes after it from the end
-            line_without_price = re.sub(r'\(\$?\d+(?:\.\d{2})?\).*$', '', line).strip()
-            # Also clean up any trailing price patterns that got left behind
-            line_without_price = re.sub(r'\$\d+\).*$', '', line_without_price).strip()
-            
-            # Find size information - look for "size" or "- size"
-            size_pattern = r'(?:-\s*)?size\s+(.*?)(?:\s*\(|$)'
-            size_match = re.search(size_pattern, line_without_price, re.IGNORECASE)
-            
-            if not size_match:
-                print(f"   ⚠️ Could not parse size from: {line_without_price[:50]}...")
-                continue
-                
-            size_info = size_match.group(1).strip()
-            
-            # Extract shoe name (everything before the size part)
-            shoe_name = re.sub(size_pattern, '', line_without_price, flags=re.IGNORECASE).strip()
-            # Clean up trailing dashes or spaces
-            shoe_name = re.sub(r'\s*-\s*$', '', shoe_name).strip()
-            
-            if not shoe_name:
-                print(f"   ⚠️ No shoe name found in: {line[:50]}...")
-                continue
-            
-            print(f"   ✅ Parsed: '{shoe_name}' - size {size_info} - ${price}")
-            
-            # Parse sizes - handle complex formats like "11.5x2, 12" or "4.5x13, 5x9, 5.5x4"
-            sizes = self._parse_size_list(size_info)
-            
-            # Create items for each size
-            for size, quantity in sizes:
-                # Determine condition based on context
-                condition = "Brand New"  # Default for DS (deadstock)
-                if "used" in line.lower():
-                    condition = "Used"
-                elif "vnds" in line.lower():
-                    condition = "Very Near Deadstock"
-                
-                # Create the specified quantity of items
-                for _ in range(quantity):
-                    item = InventoryItem(
-                        shoe_name=shoe_name,
-                        size=size,
-                        price=price,
-                        condition=condition
-                    )
-                    items.append(item)
+            if parsed_item:
+                items.extend(parsed_item)  # _parse_inventory_line returns a list
+            else:
+                print(f"   ⚠️ Could not parse line: {line[:50]}...")
         
         return items
     
-    def _parse_size_list(self, size_info: str) -> List[Tuple[str, int]]:
-        """Parse size list like '11.5x2, 12' or '4.5x13, 5x9, 5.5x4' into (size, quantity) pairs"""
-        sizes = []
+    def _parse_inventory_line(self, line: str) -> List[InventoryItem]:
+        """Parse a single inventory line - returns list of items (for quantity support)"""
+        # Strategy 1: Try SKU-based format (e.g., "DQ8426 067 - sz12 x2")
+        sku_items = self._try_parse_sku_format(line)
+        if sku_items:
+            return sku_items
         
-        # Split by commas
-        size_parts = [part.strip() for part in size_info.split(',')]
+        # Strategy 2: Try traditional shoe name format with various price patterns
+        name_items = self._try_parse_name_format(line)
+        if name_items:
+            return name_items
         
-        for part in size_parts:
-            # Handle formats like "11.5x2" or just "11"
-            if 'x' in part:
-                # Format: 11.5x2
-                size_str, qty_str = part.split('x', 1)
-                size = size_str.strip()
-                try:
-                    quantity = int(qty_str.strip())
-                except ValueError:
-                    quantity = 1
-            else:
-                # Just a size like "11" or "11.5"
-                size = part.strip()
-                quantity = 1
+        return []
+    
+    def _try_parse_sku_format(self, line: str) -> List[InventoryItem]:
+        """Try to parse SKU-based format like 'DQ8426 067 - sz12 x2'"""
+        import re
+        
+        # SKU patterns: alphanumeric codes with possible spaces/dashes
+        # Look for patterns like: DQ8426 067, GC1906ER, FB9107 131, etc.
+        sku_pattern = r'^([A-Za-z0-9]+(?:\s+[A-Za-z0-9]+)*)\s*-?\s*'
+        
+        match = re.match(sku_pattern, line)
+        if not match:
+            return []
+        
+        potential_sku = match.group(1).strip()
+        
+        # Check if this looks like a SKU (not a shoe name)
+        # SKUs are typically short alphanumeric codes, not long descriptive names
+        if (len(potential_sku) < 4 or len(potential_sku) > 20 or 
+            any(word in potential_sku.lower() for word in ['jordan', 'nike', 'adidas', 'yeezy', 'dunk'])):
+            return []
+        
+        print(f"   🔍 Detected potential SKU: {potential_sku}")
+        
+        # Extract the rest of the line after the SKU
+        remainder = line[len(match.group(0)):].strip()
+        
+        # Look for size and quantity information
+        size_info = self._extract_size_and_quantity(remainder)
+        
+        if not size_info:
+            print(f"   ⚠️ No size found for SKU: {potential_sku}")
+            return []
+        
+        # Create items for each size/quantity combination
+        items = []
+        for size, quantity in size_info:
+            for _ in range(quantity):
+                item = InventoryItem(
+                    shoe_name=potential_sku,  # Use SKU as shoe name for searching
+                    size=size,
+                    price="",  # SKU lists usually don't have prices
+                    condition="Brand New"  # Default condition
+                )
+                # Mark this as a SKU search for later processing
+                item.is_sku_search = True
+                items.append(item)
+        
+        print(f"   ✅ Parsed SKU: {potential_sku} - {len(items)} items")
+        return items
+    
+    def _try_parse_name_format(self, line: str) -> List[InventoryItem]:
+        """Try to parse traditional shoe name format with price"""
+        import re
+        
+        # Look for price patterns (multiple formats)
+        price_patterns = [
+            r'-\$(\d+(?:\.\d{2})?)',           # -$300
+            r'ALL-\$(\d+(?:\.\d{2})?)',        # ALL-$300  
+            r'ALL\s+\$(\d+(?:\.\d{2})?)',      # ALL $240
+            r'\$(\d+(?:\.\d{2})?)',            # $300
+            r'\(\$(\d+(?:\.\d{2})?)\)',        # ($300)
+        ]
+        
+        price = None
+        price_match = None
+        
+        for pattern in price_patterns:
+            match = re.search(pattern, line)
+            if match:
+                price = match.group(1)
+                price_match = match
+                break
+        
+        if not price:
+            print(f"   ⚠️ No price found in: {line[:50]}...")
+            return []
+        
+        # Remove price and any notes after it
+        line_without_price = line[:price_match.start()].strip()
+        
+        # Look for size information with flexible patterns
+        size_info = self._extract_size_and_quantity(line)
+        
+        if not size_info:
+            print(f"   ⚠️ No size found in: {line[:50]}...")
+            return []
+        
+        # Extract shoe name (everything before size information)
+        shoe_name = self._extract_shoe_name(line_without_price)
+        
+        if not shoe_name:
+            print(f"   ⚠️ No shoe name found in: {line[:50]}...")
+            return []
+        
+        # Create items for each size/quantity combination
+        items = []
+        for size, quantity in size_info:
+            # Determine condition based on context
+            condition = "Brand New"  # Default for DS (deadstock)
+            if "used" in line.lower():
+                condition = "Used"
+            elif "vnds" in line.lower():
+                condition = "Very Near Deadstock"
             
-            sizes.append((size, quantity))
+            for _ in range(quantity):
+                item = InventoryItem(
+                    shoe_name=shoe_name,
+                    size=size,
+                    price=price,
+                    condition=condition
+                )
+                items.append(item)
         
-        return sizes
+        print(f"   ✅ Parsed: '{shoe_name}' - {len(items)} items - ${price}")
+        return items
+    
+    def _extract_size_and_quantity(self, text: str) -> List[Tuple[str, int]]:
+        """Extract size and quantity information from text - handles multiple formats"""
+        import re
+        
+        size_info = []
+        
+        # Size patterns to look for (in order of specificity)
+        # Start with most specific patterns first
+        size_patterns = [
+            # Format: sz12 x2, sz5.5 x2 (with quantity)
+            r'sz(\d+(?:\.\d+)?[YyWwCc]?)\s*x\s*(\d+)',
+            # Format: - sz12 x2, - sz5.5 x2 (with quantity)
+            r'-\s*sz(\d+(?:\.\d+)?[YyWwCc]?)\s*x\s*(\d+)',
+            # Format: sz12, sz5.5 (without quantity)
+            r'sz(\d+(?:\.\d+)?[YyWwCc]?)(?!\s*x)',
+            # Format: - sz12, - sz5.5 (without quantity)  
+            r'-\s*sz(\d+(?:\.\d+)?[YyWwCc]?)(?!\s*x)',
+        ]
+        
+        # Try each pattern until we find a match
+        for pattern in size_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            
+            if matches:
+                for match in matches:
+                    if isinstance(match, tuple) and len(match) == 2:
+                        size_str = match[0].strip()
+                        quantity_str = match[1].strip()
+                    elif isinstance(match, tuple) and len(match) == 1:
+                        size_str = match[0].strip()
+                        quantity_str = "1"
+                    else:
+                        size_str = str(match).strip()
+                        quantity_str = "1"
+                    
+                    try:
+                        quantity = int(quantity_str) if quantity_str else 1
+                    except ValueError:
+                        quantity = 1
+                    
+                    # Clean up size format
+                    size = self._normalize_extracted_size(size_str)
+                    if size:
+                        size_info.append((size, quantity))
+                
+                # If we found matches with this pattern, don't try other patterns
+                if size_info:
+                    break
+        
+        # If no sz pattern found, try to find sizes in the format "5w", "10m", etc.
+        if not size_info:
+            # Look for sizes with shoe size suffixes - but be more specific
+            size_matches = re.findall(r'\b(\d+(?:\.\d+)?[YyWwMmCc])\b', text, re.IGNORECASE)
+            for size_str in size_matches:
+                size = self._normalize_extracted_size(size_str)
+                if size and self._is_reasonable_shoe_size(size):
+                    size_info.append((size, 1))
+                    break  # Take the first reasonable size
+        
+        return size_info
+    
+    def _normalize_extracted_size(self, size_str: str) -> str:
+        """Normalize extracted size string"""
+        if not size_str:
+            return ""
+        
+        # Remove any whitespace
+        size_clean = size_str.strip()
+        
+        # Standardize size suffixes
+        size_clean = re.sub(r'[Yy]$', 'Y', size_clean)  # Youth
+        size_clean = re.sub(r'[Ww]$', 'W', size_clean)  # Women
+        size_clean = re.sub(r'[Cc]$', 'C', size_clean)  # Child
+        size_clean = re.sub(r'[Mm]$', '', size_clean)   # Men (remove M)
+        
+        return size_clean
+    
+    def _is_reasonable_shoe_size(self, size_str: str) -> bool:
+        """Check if a size string represents a reasonable shoe size"""
+        try:
+            # Extract numeric part
+            numeric_part = re.sub(r'[YyWwMmCc]', '', size_str)
+            size_num = float(numeric_part)
+            # Reasonable shoe size range
+            return 3 <= size_num <= 18
+        except (ValueError, TypeError):
+            return False
+    
+    def _extract_shoe_name(self, text: str) -> str:
+        """Extract shoe name from text, removing size and condition info"""
+        import re
+        
+        # Remove common size patterns from the text - be more conservative
+        text_clean = text
+        
+        # First, remove explicit size patterns like "sz12" or "- sz12"
+        size_removal_patterns = [
+            r'\s*-?\s*sz\d+(?:\.\d+)?[YyWwCc]?.*$',     # Remove sz12 and everything after
+            r'\s*-?\s*size\s+\d+.*$',                   # Remove "size 12" and after
+        ]
+        
+        for pattern in size_removal_patterns:
+            text_clean = re.sub(pattern, '', text_clean, flags=re.IGNORECASE).strip()
+        
+        # Then remove size patterns that are clearly at the end with size suffixes
+        # Be more conservative - only remove if it's clearly a size at the end
+        size_suffix_patterns = [
+            r'\s+(\d+(?:\.\d+)?[YyWwMmCc])\s*$',        # Remove "5w" or "10m" at the end
+        ]
+        
+        for pattern in size_suffix_patterns:
+            match = re.search(pattern, text_clean)
+            if match:
+                potential_size = match.group(1)
+                if self._is_reasonable_shoe_size(potential_size):
+                    text_clean = re.sub(pattern, '', text_clean).strip()
+        
+        # Remove common condition/quality indicators from end
+        condition_patterns = [
+            r'\s*DS\s*OG\s*ALL\s*$',
+            r'\s*DS\s*$',
+            r'\s*OG\s*ALL\s*$',
+            r'\s*VNDS\s*$',
+            r'\s*NB\s*$',  # No box
+        ]
+        
+        for pattern in condition_patterns:
+            text_clean = re.sub(pattern, '', text_clean, flags=re.IGNORECASE).strip()
+        
+        # Remove trailing dashes and spaces
+        text_clean = re.sub(r'\s*-\s*$', '', text_clean).strip()
+        
+        return text_clean
+    
+    def _determine_condition(self, line: str) -> str:
+        """Determine condition from line text"""
+        line_lower = line.lower()
+        
+        if 'ds' in line_lower:
+            return "Brand New"  # Deadstock
+        elif 'vnds' in line_lower:
+            return "Very Near Deadstock"
+        elif 'used' in line_lower:
+            return "Used"
+        elif 'nb' in line_lower or 'no box' in line_lower:
+            return "Brand New"  # No box but still new
+        else:
+            return "Brand New"  # Default assumption
 
     def _is_complete_item_row(self, row: List[str]) -> bool:
         """Check if this row contains a complete item (Format 1)"""
@@ -818,54 +989,70 @@ class InventoryStockXAnalyzer:
 
     def search_stockx_for_item(self, item: InventoryItem) -> bool:
         """Search StockX for inventory item"""
+        # Check if this is a SKU-based search
+        is_sku_search = getattr(item, 'is_sku_search', False)
+        
+        if is_sku_search:
+            return self._search_by_sku(item)
+        else:
+            return self._search_by_name(item)
+    
+    def _search_by_sku(self, item: InventoryItem) -> bool:
+        """Search StockX using SKU/style ID"""
+        sku = item.shoe_name  # For SKU searches, shoe_name contains the SKU
+        size_normalized, size_category = self.normalize_size(item.size)
+
+        cache_key = f"sku_{sku}_{size_normalized}_{size_category}"
+
+        if cache_key in self.cache:
+            return self._apply_cached_result(item, cache_key)
+
+        try:
+            print(f"🔍 SKU Search: '{sku}' (Size: {size_normalized} {size_category})", flush=True)
+
+            # Try searching by SKU/style ID first
+            search_results = self._try_sku_search(sku)
+            
+            if not search_results or not search_results.get('products'):
+                print(f"   ⚠️ No direct SKU match, trying as regular search term", flush=True)
+                # Fallback to regular search if SKU search fails
+                search_results = self.client.search_products(sku, page_size=10)
+
+            if not search_results or not search_results.get('products'):
+                print("   ❌ No products found for SKU", flush=True)
+                self.cache[cache_key] = None
+                return False
+
+            # For SKU searches, prefer exact SKU matches
+            best_product = self._find_best_sku_match(search_results['products'], sku, size_category)
+            
+            if not best_product:
+                print(f"   ❌ No suitable SKU match for {sku}")
+                self.cache[cache_key] = None
+                return False
+
+            print(f"   ✅ Found SKU match: {best_product['title'][:50]}...", flush=True)
+            return self._process_product_match(item, best_product, size_normalized, size_category, cache_key)
+
+        except Exception as e:
+            print(f"   ❌ SKU search error: {str(e)}")
+            if "429" in str(e):
+                return "RATE_LIMITED"
+            self.cache[cache_key] = None
+            return False
+    
+    def _search_by_name(self, item: InventoryItem) -> bool:
+        """Search StockX using shoe name"""
         search_query = self.clean_shoe_name_for_search(item.shoe_name)
         size_normalized, size_category = self.normalize_size(item.size)
 
         cache_key = f"{search_query}_{size_normalized}_{size_category}"
 
         if cache_key in self.cache:
-            cached_result = self.cache[cache_key]
-            if cached_result:
-                item.stockx_bid = f"${cached_result['bid']}" if cached_result['bid'] else None
-                item.stockx_ask = f"${cached_result['ask']}" if cached_result['ask'] else None
-                # Add cached Alias data
-                if cached_result.get('lowest_consigned'):
-                    item.lowest_consigned = f"${cached_result['lowest_consigned']:.2f}"
-                else:
-                    item.lowest_consigned = None
-                if cached_result.get('last_consigned_price'):
-                    item.last_consigned_price = f"${cached_result['last_consigned_price']:.2f}"
-                else:
-                    item.last_consigned_price = None
-                item.last_consigned_date = self._convert_date_to_days_ago(cached_result.get('last_consigned_date'))
-                if cached_result.get('lowest_with_you'):
-                    item.lowest_with_you = f"${cached_result['lowest_with_you']:.2f}"
-                else:
-                    item.lowest_with_you = None
-                if cached_result.get('last_with_you_price'):
-                    item.last_with_you_price = f"${cached_result['last_with_you_price']:.2f}"
-                else:
-                    item.last_with_you_price = None
-                item.last_with_you_date = self._convert_date_to_days_ago(cached_result.get('last_with_you_date'))
-                if cached_result.get('consignment_price'):
-                    item.consignment_price = f"${cached_result['consignment_price']:.2f}"
-                else:
-                    item.consignment_price = None
-                if cached_result.get('ship_to_verify_price'):
-                    item.ship_to_verify_price = f"${cached_result['ship_to_verify_price']:.2f}"
-                else:
-                    item.ship_to_verify_price = None
-                item.stockx_sku = cached_result.get('sku')
-                item.stockx_url = cached_result.get('url')
-                item.stockx_size = cached_result.get('size')
-                item.stockx_shoe_name = cached_result.get('shoe_name')
-                item.bid_profit = f"${cached_result['bid_profit']:.2f}" if cached_result.get('bid_profit') is not None else None
-                item.ask_profit = f"${cached_result['ask_profit']:.2f}" if cached_result.get('ask_profit') is not None else None
-                return True
-            return False
+            return self._apply_cached_result(item, cache_key)
 
         try:
-            print(f"🔍 Searching: '{search_query}' (Size: {size_normalized} {size_category})", flush=True)
+            print(f"🔍 Name Search: '{search_query}' (Size: {size_normalized} {size_category})", flush=True)
 
             # Ensure authentication before search (in case it failed during init)
             try:
@@ -896,7 +1083,106 @@ class InventoryStockXAnalyzer:
                 return False
 
             print(f"   ✅ Found: {best_product['title'][:50]}...", flush=True)
+            return self._process_product_match(item, best_product, size_normalized, size_category, cache_key)
 
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)}")
+            # Check if this is a rate limiting error
+            if "429" in str(e):
+                return "RATE_LIMITED"
+            self.cache[cache_key] = None
+            return False
+    
+    def _try_sku_search(self, sku: str):
+        """Try to search for a product by its SKU/style ID"""
+        try:
+            # Try different SKU search approaches
+            # 1. Search with quotes for exact match
+            search_results = self.client.search_products(f'"{sku}"', page_size=5)
+            if search_results and search_results.get('products'):
+                # Check if any results have exact SKU match
+                for product in search_results['products']:
+                    if product.get('style_id') == sku:
+                        return search_results
+            
+            # 2. Try without quotes
+            search_results = self.client.search_products(sku, page_size=10)
+            return search_results
+            
+        except Exception as e:
+            print(f"   ⚠️ SKU search attempt failed: {e}")
+            return None
+    
+    def _find_best_sku_match(self, products: List[Dict], sku: str, size_category: str) -> Optional[Dict]:
+        """Find best matching product for SKU search"""
+        sku_upper = sku.upper()
+        
+        # First priority: Exact SKU match
+        for product in products:
+            product_sku = product.get('style_id', '').upper()
+            if product_sku == sku_upper:
+                print(f"   🎯 Exact SKU match: {product_sku}")
+                return product
+        
+        # Second priority: SKU appears in style_id
+        for product in products:
+            product_sku = product.get('style_id', '').upper()
+            if sku_upper in product_sku or product_sku in sku_upper:
+                print(f"   🔍 Partial SKU match: {product_sku}")
+                return product
+        
+        # Third priority: First result (if any)
+        if products:
+            print(f"   ⚠️ Using first search result for SKU: {sku}")
+            return products[0]
+        
+        return None
+    
+    def _apply_cached_result(self, item: InventoryItem, cache_key: str) -> bool:
+        """Apply cached search result to item"""
+        cached_result = self.cache[cache_key]
+        if cached_result:
+            item.stockx_bid = f"${cached_result['bid']}" if cached_result['bid'] else None
+            item.stockx_ask = f"${cached_result['ask']}" if cached_result['ask'] else None
+            # Add cached Alias data
+            if cached_result.get('lowest_consigned'):
+                item.lowest_consigned = f"${cached_result['lowest_consigned']:.2f}"
+            else:
+                item.lowest_consigned = None
+            if cached_result.get('last_consigned_price'):
+                item.last_consigned_price = f"${cached_result['last_consigned_price']:.2f}"
+            else:
+                item.last_consigned_price = None
+            item.last_consigned_date = self._convert_date_to_days_ago(cached_result.get('last_consigned_date'))
+            if cached_result.get('lowest_with_you'):
+                item.lowest_with_you = f"${cached_result['lowest_with_you']:.2f}"
+            else:
+                item.lowest_with_you = None
+            if cached_result.get('last_with_you_price'):
+                item.last_with_you_price = f"${cached_result['last_with_you_price']:.2f}"
+            else:
+                item.last_with_you_price = None
+            item.last_with_you_date = self._convert_date_to_days_ago(cached_result.get('last_with_you_date'))
+            if cached_result.get('consignment_price'):
+                item.consignment_price = f"${cached_result['consignment_price']:.2f}"
+            else:
+                item.consignment_price = None
+            if cached_result.get('ship_to_verify_price'):
+                item.ship_to_verify_price = f"${cached_result['ship_to_verify_price']:.2f}"
+            else:
+                item.ship_to_verify_price = None
+            item.stockx_sku = cached_result.get('sku')
+            item.stockx_url = cached_result.get('url')
+            item.stockx_size = cached_result.get('size')
+            item.stockx_shoe_name = cached_result.get('shoe_name')
+            item.bid_profit = f"${cached_result['bid_profit']:.2f}" if cached_result.get('bid_profit') is not None else None
+            item.ask_profit = f"${cached_result['ask_profit']:.2f}" if cached_result.get('ask_profit') is not None else None
+            return True
+        return False
+    
+    def _process_product_match(self, item: InventoryItem, best_product: Dict, size_normalized: str, size_category: str, cache_key: str) -> bool:
+        """Process a product match and get pricing data"""
+        try:
             # Get variants for the product
             variants = self.get_product_variants(best_product['id'])
 
