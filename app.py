@@ -1458,15 +1458,21 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                if filename.endswith('.csv'):
+                # Look for CSV files and enhanced output files (which might be .txt)
+                if (filename.endswith('.csv') or 
+                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt'))):
                     filepath = os.path.join(directory, filename)
-                    file_info = {
-                        'name': filename,
-                        'path': directory,
-                        'size': os.path.getsize(filepath),
-                        'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).strftime('%Y-%m-%d %H:%M:%S')
-                    }
-                    files.append(file_info)
+                    try:
+                        file_info = {
+                            'name': filename,
+                            'path': directory,
+                            'size': os.path.getsize(filepath),
+                            'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        files.append(file_info)
+                    except (OSError, IOError):
+                        # Skip files that can't be accessed
+                        continue
     
     # Sort by modification time (newest first)
     files.sort(key=lambda x: x['modified'], reverse=True)

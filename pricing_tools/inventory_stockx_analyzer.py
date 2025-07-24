@@ -1534,7 +1534,9 @@ class InventoryStockXAnalyzer:
         """Process CSV inventory"""
         if not output_file:
             input_path = Path(csv_file)
-            output_file = input_path.parent / f"stockx_enhanced_{input_path.name}"
+            # Always use .csv extension for output files
+            output_filename = f"stockx_enhanced_{input_path.stem}.csv"
+            output_file = input_path.parent / output_filename
 
         print(f"📊 Processing CSV inventory: {csv_file}", flush=True)
         print(f"💾 Output will be saved to: {output_file}", flush=True)
@@ -1555,7 +1557,9 @@ class InventoryStockXAnalyzer:
         """Process pasted list format (separate from CSV processing)"""
         if not output_file:
             input_path = Path(text_file)
-            output_file = input_path.parent / f"stockx_enhanced_{input_path.name}"
+            # Always use .csv extension for output files
+            output_filename = f"stockx_enhanced_{input_path.stem}.csv"
+            output_file = input_path.parent / output_filename
 
         print(f"📋 Processing pasted list: {text_file}", flush=True)
         print(f"💾 Output will be saved to: {output_file}", flush=True)
