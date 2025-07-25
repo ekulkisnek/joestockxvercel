@@ -914,14 +914,49 @@ White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)"
         </div>
         
         <p><em>Both options analyze inventory against StockX market data with Alias pricing insights</em></p>
+        
+        <h3>🔍 Single Shoe Analysis</h3>
+        <!-- Single Shoe Analysis -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>🎯 Comprehensive Single Shoe Analysis</h4>
+            <p><em>Get complete pricing, sales volume, and market insights for any shoe in one detailed report</em></p>
+            <form action="/analyze_single_shoe" method="post" style="margin: 10px 0;">
+                <label for="shoe_query">Enter shoe name, SKU, or description:</label><br>
+                <input type="text" name="shoe_query" id="shoe_query" 
+                       placeholder="e.g., Jordan 1 Chicago, DQ8426-067, Yeezy Boost 350 Cream"
+                       style="margin: 5px 0; width: 300px; padding: 5px;" required><br>
+                <input type="submit" value="🔍 Analyze This Shoe" class="upload-button">
+            </form>
+            <p><small><strong>Features:</strong> StockX pricing, Alias insights, sales velocity, size-by-size breakdown, market recommendations</small></p>
+        </div>
+        
+        <h3>📈 Sales Volume Analysis</h3>
+        <!-- Sales Volume CSV Upload -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>📊 Upload CSV for Sales Volume Analysis</h4>
+            <p><em>Analyze sales velocity and volume data for your shoe inventory using Alias API</em></p>
+            <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+                <input type="hidden" name="script_type" value="sales_volume">
+                <label for="sales_volume_upload">Upload CSV file with shoe names/SKUs:</label><br>
+                <input type="file" name="file" id="sales_volume_upload" accept=".csv" style="margin: 5px 0;"><br>
+                <input type="submit" value="Upload & Run Sales Volume Analysis" class="upload-button">
+            </form>
+            <p><small><strong>Features:</strong> Sales velocity per day, total sales counts, price analysis, reliability indicators, duplicate detection</small></p>
+        </div>
     </div>
     
     <div class="results-section">
         <h2>📁 Results & Downloads</h2>
         <p><strong>Your processed files are saved in these locations:</strong></p>
         <ul>
-            <li><strong>uploads/</strong> - Your uploaded CSV files</li>
-            <li><strong>pricing_tools/</strong> - Inventory analysis results</li>
+            <li><strong>uploads/</strong> - Your uploaded CSV files and analysis results</li>
+            <li><strong>pricing_tools/</strong> - Analysis output files</li>
+        </ul>
+        <p><strong>Available Analysis Types:</strong></p>
+        <ul>
+            <li>📊 <strong>Inventory Analysis:</strong> StockX pricing with Alias data (stockx_enhanced_*.csv)</li>
+            <li>📈 <strong>Sales Volume Analysis:</strong> Sales velocity and volume data (sales_volume_analysis_*.csv)</li>
+            <li>🔍 <strong>Single Shoe Analysis:</strong> Comprehensive reports displayed directly on screen</li>
         </ul>
         <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">View & Download All Results</a></p>
         <p><em>⏱️ Processing can take several minutes. Your files remain available even if you close the browser.</em></p>
@@ -1392,6 +1427,9 @@ def upload_file():
         if script_type == 'inventory':
             command = f'python3 inventory_stockx_analyzer.py "../uploads/{filename}"'
             working_dir = 'pricing_tools'
+        elif script_type == 'sales_volume':
+            command = f'python3 sales_volume_analyzer.py "../uploads/{filename}"'
+            working_dir = 'pricing_tools'
         else:
             flash('Invalid script type')
             return redirect(url_for('index'))
@@ -1449,6 +1487,486 @@ def paste_inventory():
     
     return redirect(url_for('index'))
 
+@app.route('/analyze_single_shoe', methods=['POST'])
+def analyze_single_shoe():
+    """Handle single shoe analysis - REQUIRES AUTHENTICATION"""
+    shoe_query = request.form.get('shoe_query', '').strip()
+    
+    if not shoe_query:
+        flash('Please enter a shoe name or SKU')
+        return redirect(url_for('index'))
+    
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, recovery_action = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ ANALYSIS BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+    
+    try:
+        # Import and run single shoe analyzer
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from single_shoe_analyzer import SingleShoeAnalyzer
+        
+        analyzer = SingleShoeAnalyzer()
+        result = analyzer.analyze_single_shoe(shoe_query)
+        
+        # Generate comprehensive HTML response
+        return render_single_shoe_analysis(result)
+        
+    except Exception as e:
+        flash(f'Analysis error: {str(e)}')
+        return redirect(url_for('index'))
+
+def render_single_shoe_analysis(result: dict) -> str:
+    """Render comprehensive single shoe analysis results"""
+    
+    if not result.get('success'):
+        error_msg = ', '.join(result.get('errors', ['Unknown error']))
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>❌ Analysis Failed</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                .error {{ color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 5px; }}
+            </style>
+        </head>
+        <body>
+            <h1>❌ Shoe Analysis Failed</h1>
+            <div class="error">
+                <strong>Query:</strong> {result.get('query', 'Unknown')}<br>
+                <strong>Error:</strong> {error_msg}
+            </div>
+            <p><a href="/">← Back to Main Page</a></p>
+        </body>
+        </html>
+        """
+    
+    # Extract data for rendering
+    query = result.get('query', 'Unknown Shoe')
+    shoe_id = result.get('shoe_identification', {})
+    market = result.get('market_summary', {})
+    performance = result.get('sales_performance', {})
+    pricing = result.get('pricing_insights', {})
+    size_breakdown = result.get('size_breakdown', {})
+    quality = result.get('data_quality', {})
+    
+    # Build comprehensive HTML response with organized layout
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🔍 Analysis: {query}</title>
+        <style>
+            body {{ 
+                font-family: 'Segoe UI', Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px;
+                line-height: 1.6;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }}
+            .container {{ 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                overflow: hidden;
+            }}
+            .header {{ 
+                background: linear-gradient(135deg, #2c3e50, #34495e);
+                color: white; 
+                padding: 30px; 
+                text-align: center;
+            }}
+            .header h1 {{ margin: 0; font-size: 2.5em; }}
+            .header h2 {{ margin: 10px 0 0 0; font-weight: 300; opacity: 0.9; }}
+            
+            .content {{ padding: 20px; }}
+            
+            .priority-section {{ 
+                background: linear-gradient(135deg, #27ae60, #2ecc71);
+                color: white;
+                padding: 25px;
+                margin: 20px 0;
+                border-radius: 12px;
+                text-align: center;
+            }}
+            
+            .recommendation {{ 
+                font-size: 1.5em; 
+                font-weight: bold; 
+                padding: 20px; 
+                border-radius: 10px;
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .rec-strong-buy {{ background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; }}
+            .rec-buy {{ background: linear-gradient(135deg, #3498db, #2980b9); color: white; }}
+            .rec-caution {{ background: linear-gradient(135deg, #f39c12, #e67e22); color: white; }}
+            .rec-avoid {{ background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }}
+            
+            .metrics-grid {{ 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                gap: 15px; 
+                margin: 20px 0;
+            }}
+            .metric {{ 
+                background: #f8f9fa; 
+                padding: 20px; 
+                border-radius: 10px;
+                text-align: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }}
+            .metric-label {{ 
+                font-size: 0.9em; 
+                color: #666; 
+                margin-bottom: 5px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
+            .metric-value {{ 
+                font-size: 1.5em; 
+                font-weight: bold; 
+                color: #2c3e50; 
+            }}
+            
+            .section {{ 
+                margin: 30px 0; 
+                padding: 25px; 
+                background: #f8f9fa;
+                border-radius: 12px;
+                border-left: 5px solid #3498db;
+            }}
+            .section h3 {{ 
+                margin-top: 0; 
+                color: #2c3e50;
+                font-size: 1.3em;
+            }}
+            
+            .size-grid {{ 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+                gap: 15px; 
+                margin: 20px 0;
+            }}
+            .size-card {{ 
+                background: white; 
+                padding: 20px; 
+                border-radius: 10px; 
+                border: 1px solid #ddd;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                transition: transform 0.2s;
+            }}
+            .size-card:hover {{ transform: translateY(-2px); }}
+            .size-title {{ 
+                font-weight: bold; 
+                color: #2c3e50; 
+                margin-bottom: 15px;
+                font-size: 1.1em;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 5px;
+            }}
+            
+            table {{ 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 15px 0;
+                background: white;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }}
+            th, td {{ 
+                padding: 12px 15px; 
+                text-align: left; 
+                border-bottom: 1px solid #eee; 
+            }}
+            th {{ 
+                background: #34495e; 
+                color: white;
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.9em;
+                letter-spacing: 1px;
+            }}
+            tr:hover {{ background: #f8f9fa; }}
+            
+            .back-link {{ 
+                position: fixed; 
+                top: 30px; 
+                right: 30px; 
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white; 
+                padding: 12px 20px; 
+                text-decoration: none; 
+                border-radius: 25px;
+                box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+                font-weight: bold;
+                transition: transform 0.2s;
+                z-index: 1000;
+            }}
+            .back-link:hover {{ 
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+            }}
+            
+            .quality-excellent {{ border-left-color: #27ae60; }}
+            .quality-good {{ border-left-color: #3498db; }}
+            .quality-fair {{ border-left-color: #f39c12; }}
+            .quality-poor {{ border-left-color: #e74c3c; }}
+            
+            .highlight {{ 
+                background: linear-gradient(135deg, #fff, #f8f9fa);
+                border: 2px solid #3498db;
+                border-radius: 10px;
+                padding: 20px;
+                margin: 20px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="container">
+            <div class="header">
+                <h1>🔍 Comprehensive Shoe Analysis</h1>
+                <h2>{query}</h2>
+                <p>Analysis completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+            
+            <div class="content">
+                <!-- Priority Section - Market Summary -->
+                <div class="priority-section">
+                    <h2>💰 MARKET SUMMARY & RECOMMENDATION</h2>
+                    <div class="recommendation {get_rec_class(market.get('recommended_action', ''))}">
+                        {market.get('recommended_action', 'No recommendation available')}
+                    </div>
+                    
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-label">Current Market Price</div>
+                            <div class="metric-value">{market.get('current_market_price', 'N/A')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Sales Velocity</div>
+                            <div class="metric-value">{market.get('sales_velocity', 'N/A')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Market Activity</div>
+                            <div class="metric-value">{market.get('market_activity', 'N/A')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Price Range</div>
+                            <div class="metric-value">{market.get('price_range', 'N/A')}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Shoe Identification -->
+                <div class="section">
+                    <h3>👟 SHOE IDENTIFICATION</h3>
+                    <table>
+                        <tr><th>Property</th><th>Value</th></tr>
+                        <tr><td>Name</td><td>{shoe_id.get('name', 'Unknown')}</td></tr>
+                        <tr><td>Brand</td><td>{shoe_id.get('brand', 'Unknown')}</td></tr>
+                        <tr><td>SKU</td><td>{shoe_id.get('sku', 'N/A')}</td></tr>
+                        <tr><td>Colorway</td><td>{shoe_id.get('colorway', 'N/A')}</td></tr>
+                        <tr><td>Release Date</td><td>{shoe_id.get('release_date', 'N/A')}</td></tr>
+                        <tr><td>Retail Price</td><td>${shoe_id.get('retail_price', 0)}</td></tr>
+                    </table>
+                </div>
+                
+                <!-- Sales Performance -->
+                <div class="section">
+                    <h3>📈 SALES PERFORMANCE</h3>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-label">Total Sales</div>
+                            <div class="metric-value">{performance.get('total_sales', 0)}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Active Sizes</div>
+                            <div class="metric-value">{performance.get('active_sizes', 0)}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Analysis Period</div>
+                            <div class="metric-value">{performance.get('analysis_period', 'N/A')}</div>
+                        </div>
+                    </div>
+                    
+                    {build_top_sizes_table(performance.get('top_performing_sizes', []))}
+                </div>
+                
+                <!-- Size Breakdown -->
+                {build_size_breakdown_section(size_breakdown)}
+                
+                <!-- Alias Pricing Insights -->
+                {build_alias_pricing_section(pricing.get('alias_pricing', {}))}
+                
+                <!-- Data Quality Assessment -->
+                <div class="section quality-{quality.get('overall_score', 'unknown').lower()}">
+                    <h3>📊 DATA QUALITY ASSESSMENT</h3>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-label">Overall Quality</div>
+                            <div class="metric-value">{quality.get('overall_score', 'Unknown')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">StockX Data</div>
+                            <div class="metric-value">{quality.get('stockx_quality', 'Unknown')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Alias Data</div>
+                            <div class="metric-value">{quality.get('alias_quality', 'Unknown')}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Volume Data</div>
+                            <div class="metric-value">{quality.get('volume_quality', 'Unknown')}</div>
+                        </div>
+                    </div>
+                    
+                    {build_warnings_section(quality.get('warnings', []))}
+                </div>
+                
+                <!-- Processing Info -->
+                <div class="section">
+                    <h3>ℹ️ ANALYSIS INFO</h3>
+                    <p><strong>Processing Time:</strong> {result.get('processing_time', 0)} seconds</p>
+                    <p><strong>Timestamp:</strong> {result.get('timestamp', 'Unknown')}</p>
+                    <p><em>Analysis combines real-time StockX market data with Alias sales volume insights</em></p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def get_rec_class(recommendation: str) -> str:
+    """Get CSS class for recommendation styling"""
+    if not recommendation:
+        return 'rec-avoid'
+    rec_lower = recommendation.lower()
+    if 'strong buy' in rec_lower or '🔥' in recommendation:
+        return 'rec-strong-buy'
+    elif 'buy' in rec_lower or 'consider' in rec_lower or '📈' in recommendation:
+        return 'rec-buy'
+    elif 'caution' in rec_lower or '⚠️' in recommendation:
+        return 'rec-caution'
+    elif 'avoid' in rec_lower or '❌' in recommendation:
+        return 'rec-avoid'
+    else:
+        return 'rec-buy'
+
+def build_top_sizes_table(top_sizes: list) -> str:
+    """Build HTML for top performing sizes table"""
+    if not top_sizes:
+        return ""
+    
+    html = """
+    <div class="highlight">
+        <h4>🏆 Top Performing Sizes</h4>
+        <table>
+            <tr><th>Size</th><th>Sales Count</th><th>Velocity/Day</th><th>Data Status</th></tr>
+    """
+    for size_data in top_sizes[:5]:
+        limit_indicator = "API Limited" if size_data.get('hit_limit') else "Complete"
+        limit_symbol = "≥" if size_data.get('hit_limit') else ""
+        html += f"""
+            <tr>
+                <td>Size {size_data['size']}</td>
+                <td>{limit_symbol}{size_data['sales']}</td>
+                <td>{limit_symbol}{size_data['velocity']:.2f}</td>
+                <td>{limit_indicator}</td>
+            </tr>
+        """
+    html += "</table></div>"
+    return html
+
+def build_size_breakdown_section(size_breakdown: dict) -> str:
+    """Build HTML for size breakdown section"""
+    if not size_breakdown:
+        return ""
+    
+    # Sort sizes numerically where possible
+    try:
+        sorted_sizes = sorted(size_breakdown.keys(), key=lambda x: float(str(x)) if str(x).replace('.', '').isdigit() else 999)
+    except:
+        sorted_sizes = sorted(size_breakdown.keys())
+    
+    html = """
+    <div class="section">
+        <h3>📏 SIZE-BY-SIZE BREAKDOWN</h3>
+        <div class="size-grid">
+    """
+    
+    for size in sorted_sizes[:12]:  # Show top 12 sizes
+        size_data = size_breakdown[size]
+        stockx = size_data.get('stockx_data', {})
+        volume = size_data.get('volume_data', {})
+        insights = size_data.get('combined_insights', {})
+        
+        html += f"""
+        <div class="size-card">
+            <div class="size-title">Size {size}</div>
+            <p><strong>StockX Market:</strong><br>
+            Bid: ${stockx.get('highest_bid', 'N/A')}<br>
+            Ask: ${stockx.get('lowest_ask', 'N/A')}</p>
+            
+            <p><strong>Sales Volume:</strong><br>
+            Count: {volume.get('sales_count', 0)}<br>
+            Velocity: {volume.get('velocity_per_day', 0):.2f}/day</p>
+            
+            <p><strong>Insight:</strong><br>
+            <em>{insights.get('recommendation', 'No data available')}</em></p>
+        </div>
+        """
+    
+    html += "</div></div>"
+    return html
+
+def build_alias_pricing_section(alias_pricing: dict) -> str:
+    """Build HTML for Alias pricing section"""
+    if not alias_pricing or not any(alias_pricing.values()):
+        return ""
+    
+    html = """
+    <div class="section">
+        <h3>💎 ALIAS PRICING INSIGHTS</h3>
+        <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+    """
+    
+    pricing_items = [
+        ('Consignment Price', alias_pricing.get('consignment_price')),
+        ('Ship-to-Verify Price', alias_pricing.get('ship_to_verify_price')),
+        ('Lowest Consigned', alias_pricing.get('lowest_consigned')),
+        ('Last Consigned Price', alias_pricing.get('last_consigned_price')),
+        ('Last Consigned Date', alias_pricing.get('last_consigned_date'))
+    ]
+    
+    for label, value in pricing_items:
+        if value is not None:
+            display_value = f"${value}" if isinstance(value, (int, float)) else str(value)
+            html += f"<tr><td>{label}</td><td>{display_value}</td></tr>"
+    
+    html += "</table></div>"
+    return html
+
+def build_warnings_section(warnings: list) -> str:
+    """Build HTML for warnings section"""
+    if not warnings:
+        return ""
+    
+    html = "<div class='highlight'><h4>⚠️ Data Quality Warnings:</h4><ul>"
+    for warning in warnings:
+        html += f"<li>{warning}</li>"
+    html += "</ul></div>"
+    return html
+
 @app.route('/downloads')
 def list_downloads():
     """List available output files for download"""
@@ -1460,7 +1978,8 @@ def list_downloads():
             for filename in os.listdir(directory):
                 # Look for CSV files and enhanced output files (which might be .txt)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt'))):
+                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
                         file_info = {
