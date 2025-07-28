@@ -325,33 +325,11 @@ class SKUFinder:
                     stockx_name = None
                     stockx_data = {}
                 else:
-                    # Search StockX for the shoe
-                    print(f"   📊 Searching StockX API...")
-                    try:
-                        search_results = self.client.search_products(shoe['shoe_name'], page_size=5)
-                        print(f"   ✅ StockX API call completed")
-                    except Exception as stockx_error:
-                        print(f"   ❌ StockX API error: {stockx_error}")
-                        search_results = None
+                    # Enhanced StockX search with multiple strategies
+                    print(f"   📊 Searching StockX API with enhanced strategies...")
+                    stockx_sku, stockx_name, stockx_data = self._search_stockx_enhanced(shoe['shoe_name'])
                 
-                stockx_sku = None
-                stockx_name = None
-                stockx_data = {}
-                
-                if search_results and search_results.get('products'):
-                    # Get the best match (first result)
-                    best_match = search_results['products'][0]
-                    stockx_sku = best_match.get('style_id') or best_match.get('id')
-                    stockx_name = best_match.get('title')
-                    stockx_data = {
-                        'brand': best_match.get('brand'),
-                        'category': best_match.get('category'),
-                        'release_date': best_match.get('release_date'),
-                        'retail_price': best_match.get('retail_price'),
-                        'colorway': best_match.get('colorway'),
-                        'product_id': best_match.get('product_id')
-                    }
-                    
+                if stockx_sku and stockx_name:
                     print(f"   ✅ StockX Found:")
                     print(f"      🏷️  SKU: {stockx_sku}")
                     print(f"      📝 Name: {stockx_name}")
@@ -472,7 +450,7 @@ class SKUFinder:
         return results
 
     def search_alias_for_sku(self, shoe_name: str) -> Dict:
-        """Search Alias API for shoe SKU with multiple strategies"""
+        """Enhanced Alias search with multiple strategies from inventory analyzer"""
         try:
             headers = {
                 'Authorization': f'Bearer {self.alias_api_key}',
@@ -497,10 +475,31 @@ class SKUFinder:
                     catalog_item = search_data['catalog_items'][0]
                     return self._extract_alias_data(catalog_item, "Cleaned search")
             
-            # Strategy 3: Try with common variations
+            # Strategy 3: If this looks like a SKU, try cleaning it
+            if self._looks_like_sku(shoe_name):
+                cleaned_sku = self._clean_sku_for_alias_search(shoe_name)
+                if cleaned_sku != shoe_name:
+                    print(f"      🔍 Strategy 3: Cleaned SKU search for '{cleaned_sku}'")
+                    search_data = self._try_alias_search(cleaned_sku, headers)
+                    
+                    if search_data and search_data.get('catalog_items'):
+                        catalog_item = search_data['catalog_items'][0]
+                        return self._extract_alias_data(catalog_item, "Cleaned SKU search")
+            
+            # Strategy 4: If we have a SKU with spaces, try with dashes
+            if ' ' in shoe_name:
+                sku_with_dash = shoe_name.replace(' ', '-')
+                print(f"      🔍 Strategy 4: SKU with dash search for '{sku_with_dash}'")
+                search_data = self._try_alias_search(sku_with_dash, headers)
+                
+                if search_data and search_data.get('catalog_items'):
+                    catalog_item = search_data['catalog_items'][0]
+                    return self._extract_alias_data(catalog_item, "SKU with dash")
+            
+            # Strategy 5: Try with common variations
             variations = self._generate_search_variations(shoe_name)
             for variation in variations:
-                print(f"      🔍 Strategy 3: Variation search for '{variation}'")
+                print(f"      🔍 Strategy 5: Variation search for '{variation}'")
                 search_data = self._try_alias_search(variation, headers)
                 
                 if search_data and search_data.get('catalog_items'):
@@ -543,18 +542,77 @@ class SKUFinder:
             print(f"      ⚠️ Alias search error for '{query}': {e}")
             return None
     
+    def _looks_like_sku(self, text: str) -> bool:
+        """Check if text looks like a SKU"""
+        if not text:
+            return False
+        
+        # Remove spaces and convert to uppercase
+        clean_text = re.sub(r'\s+', '', text.upper())
+        
+        # Common SKU patterns
+        sku_patterns = [
+            r'^[A-Z]{2}\d{3,4}-\d{3}$',  # DD1391-300
+            r'^[A-Z]{2}\d{3,4}\d{3}$',   # DD1391300
+            r'^\d{6}-\d{3}$',            # 153265-057
+            r'^\d{6}\d{3}$',             # 153265057
+            r'^[A-Z]{2,4}\d{3,6}$',      # General pattern
+            r'^\d{6,9}$',                # Numeric only
+        ]
+        
+        for pattern in sku_patterns:
+            if re.match(pattern, clean_text):
+                return True
+        
+        return False
+    
+    def _clean_sku_for_alias_search(self, sku: str) -> str:
+        """Clean SKU for better Alias search results"""
+        # Remove extra spaces and normalize
+        cleaned = re.sub(r'\s+', ' ', sku.strip())
+        
+        # Try removing spaces entirely
+        if ' ' in cleaned:
+            return cleaned.replace(' ', '')
+        
+        return cleaned
+    
     def _clean_shoe_name_for_alias(self, shoe_name: str) -> str:
-        """Clean shoe name for better Alias search results"""
+        """Clean shoe name for better Alias search results using inventory analyzer strategies"""
+        cleaned = shoe_name.strip()
+
         # Remove size information
-        cleaned = re.sub(r'\s+\d+(?:\.\d+)?\s*(GS|PS|TD|Y|C|W)?\s*$', '', shoe_name, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s+\d+(?:\.\d+)?\s*(GS|PS|TD|Y|C|W)?\s*$', '', cleaned, flags=re.IGNORECASE)
         
         # Remove common prefixes/suffixes
         cleaned = re.sub(r'\b(and below|size)\b', '', cleaned, flags=re.IGNORECASE)
         
-        # Clean up extra spaces
+        # Only remove generic condition/quality notes, preserve important details
+        patterns_to_remove = [
+            r'\s*\(slight markings[^)]*\)$',  # Remove condition notes
+            r'\s*\(no box\)$',                # Remove packaging notes
+            r'\s*\(VNDS\)$',                  # Remove condition abbreviations
+            r'\s*\(DS\)$',                    # Remove deadstock notes
+        ]
+
+        for pattern in patterns_to_remove:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+
+        # Preserve important details like years, "without laces", etc.
+        # Only clean up excessive spacing and normalize some terms
+        replacements = {
+            'RETRO HIGH': 'High',     # Normalize retro terms
+            'RETRO LOW': 'Low',       # Normalize retro terms  
+            '1 85': '1',              # Fix spacing issues
+        }
+
+        for old, new in replacements.items():
+            cleaned = cleaned.replace(old, new)
+
+        # Clean up spacing but preserve all meaningful words
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-        
-        return cleaned
+
+        return cleaned[:80]  # Increased length to preserve more details
     
     def _generate_search_variations(self, shoe_name: str) -> List[str]:
         """Generate search variations for better Alias matching"""
@@ -593,14 +651,17 @@ class SKUFinder:
         return variations[:3]  # Limit to 3 variations
     
     def _extract_alias_data(self, catalog_item: Dict, strategy: str) -> Dict:
-        """Extract data from Alias catalog item"""
-        # Try multiple fields for SKU extraction
-        alias_sku = (catalog_item.get('sku') or 
-                   catalog_item.get('style_id') or 
-                   catalog_item.get('style_code') or 
-                   catalog_item.get('product_id') or 
-                   catalog_item.get('model_number') or 
-                   '')
+        """Extract data from Alias catalog item with enhanced SKU processing"""
+        # Try multiple fields for SKU extraction with normalization
+        raw_sku = (catalog_item.get('sku') or 
+                  catalog_item.get('style_id') or 
+                  catalog_item.get('style_code') or 
+                  catalog_item.get('product_id') or 
+                  catalog_item.get('model_number') or 
+                  '')
+        
+        # Normalize SKU for better matching
+        alias_sku = self._normalize_sku(raw_sku)
         
         # Extract additional data
         alias_data = {
@@ -610,7 +671,8 @@ class SKUFinder:
             'colorway': catalog_item.get('colorway'),
             'catalog_id': catalog_item.get('catalog_id'),
             'model': catalog_item.get('model'),
-            'subtitle': catalog_item.get('subtitle')
+            'subtitle': catalog_item.get('subtitle'),
+            'raw_sku': raw_sku  # Keep original for debugging
         }
         
         return {
@@ -620,41 +682,374 @@ class SKUFinder:
             'strategy': strategy,
             **alias_data  # Include all the additional data
         }
+    
+    def _normalize_sku(self, sku: str) -> str:
+        """Normalize SKU for consistent matching between platforms"""
+        if not sku:
+            return ''
+        
+        # Convert to uppercase
+        normalized = sku.upper().strip()
+        
+        # Remove extra spaces and normalize spacing
+        normalized = re.sub(r'\s+', ' ', normalized)
+        
+        # Handle common SKU format variations
+        # Convert "DD1391 300" to "DD1391-300"
+        if re.match(r'^[A-Z]{2}\d{3,4}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        
+        # Convert "153265 057" to "153265-057"
+        if re.match(r'^\d{6}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        
+        # Handle SKUs with different separators
+        normalized = re.sub(r'[_\s]+', '-', normalized)
+        
+        # Remove any trailing separators
+        normalized = normalized.rstrip('-')
+        
+        return normalized
+    
+    def _normalize_stockx_sku(self, sku: str) -> str:
+        """Normalize StockX SKU for consistent matching"""
+        if not sku:
+            return ''
+        
+        # Convert to uppercase
+        normalized = sku.upper().strip()
+        
+        # Handle StockX SKU format variations
+        # Convert "DD1391-300" to "DD1391-300" (already correct)
+        # Convert "DD1391 300" to "DD1391-300"
+        if re.match(r'^[A-Z]{2}\d{3,4}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        
+        # Convert "153265-057" to "153265-057" (already correct)
+        # Convert "153265 057" to "153265-057"
+        if re.match(r'^\d{6}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        
+        return normalized
 
     def verify_sku_match(self, stockx_sku: str, alias_sku: str, stockx_name: str, alias_name: str) -> Dict:
-        """Verify if SKUs match between StockX and Alias"""
+        """Enhanced SKU verification with multiple matching strategies"""
         match_result = {
             'skus_match': False,
             'names_similar': False,
             'confidence': 'low',
-            'warnings': []
+            'warnings': [],
+            'match_details': {}
         }
         
-        # Check if SKUs match exactly
-        if stockx_sku and alias_sku:
-            if stockx_sku.lower() == alias_sku.lower():
+        # Normalize SKUs for comparison
+        normalized_stockx_sku = self._normalize_stockx_sku(stockx_sku) if stockx_sku else ''
+        normalized_alias_sku = self._normalize_sku(alias_sku) if alias_sku else ''
+        
+        match_result['match_details']['normalized_stockx'] = normalized_stockx_sku
+        match_result['match_details']['normalized_alias'] = normalized_alias_sku
+        
+        # Strategy 1: Exact normalized SKU match
+        if normalized_stockx_sku and normalized_alias_sku:
+            if normalized_stockx_sku == normalized_alias_sku:
                 match_result['skus_match'] = True
                 match_result['confidence'] = 'high'
-            else:
-                match_result['warnings'].append(f"SKU mismatch: StockX={stockx_sku}, Alias={alias_sku}")
+                match_result['match_details']['strategy'] = 'exact_normalized'
+                return match_result
         
-        # Check if names are similar
-        if stockx_name and alias_name:
-            # Simple similarity check (can be enhanced)
-            stockx_words = set(stockx_name.lower().split())
-            alias_words = set(alias_name.lower().split())
-            common_words = stockx_words.intersection(alias_words)
+        # Strategy 2: Exact case-insensitive match
+        if stockx_sku and alias_sku:
+            if stockx_sku.upper() == alias_sku.upper():
+                match_result['skus_match'] = True
+                match_result['confidence'] = 'high'
+                match_result['match_details']['strategy'] = 'exact_case_insensitive'
+                return match_result
+        
+        # Strategy 3: SKU pattern matching (handle format variations)
+        if normalized_stockx_sku and normalized_alias_sku:
+            # Remove separators and compare
+            stockx_clean = re.sub(r'[^A-Z0-9]', '', normalized_stockx_sku)
+            alias_clean = re.sub(r'[^A-Z0-9]', '', normalized_alias_sku)
             
-            if len(common_words) >= 3:  # At least 3 common words
+            if stockx_clean == alias_clean:
+                match_result['skus_match'] = True
+                match_result['confidence'] = 'high'
+                match_result['match_details']['strategy'] = 'pattern_match'
+                return match_result
+        
+        # Strategy 4: Partial SKU matching (for cases where one platform has extra digits)
+        if normalized_stockx_sku and normalized_alias_sku:
+            # Check if one SKU contains the other
+            if (len(normalized_stockx_sku) > 6 and len(normalized_alias_sku) > 6 and
+                (normalized_stockx_sku in normalized_alias_sku or normalized_alias_sku in normalized_stockx_sku)):
+                match_result['skus_match'] = True
+                match_result['confidence'] = 'medium'
+                match_result['match_details']['strategy'] = 'partial_match'
+                match_result['warnings'].append(f"Partial SKU match: {normalized_stockx_sku} ~ {normalized_alias_sku}")
+                return match_result
+        
+        # Strategy 5: Name-based verification with enhanced similarity
+        if stockx_name and alias_name:
+            similarity_score = self._calculate_name_similarity(stockx_name, alias_name)
+            match_result['match_details']['name_similarity'] = similarity_score
+            
+            if similarity_score >= 0.8:  # High similarity
                 match_result['names_similar'] = True
-                if match_result['skus_match']:
-                    match_result['confidence'] = 'high'
-                else:
-                    match_result['confidence'] = 'medium'
-            else:
-                match_result['warnings'].append(f"Name similarity low: StockX='{stockx_name}', Alias='{alias_name}'")
+                match_result['confidence'] = 'high'
+                match_result['match_details']['strategy'] = 'high_name_similarity'
+                if not match_result['skus_match']:
+                    match_result['warnings'].append(f"High name similarity ({similarity_score:.2f}) but SKU mismatch")
+                return match_result
+            elif similarity_score >= 0.6:  # Medium similarity
+                match_result['names_similar'] = True
+                match_result['confidence'] = 'medium'
+                match_result['match_details']['strategy'] = 'medium_name_similarity'
+                if not match_result['skus_match']:
+                    match_result['warnings'].append(f"Medium name similarity ({similarity_score:.2f}) but SKU mismatch")
+                return match_result
+        
+        # If we get here, no match found
+        if stockx_sku and alias_sku:
+            match_result['warnings'].append(f"SKU mismatch: StockX={stockx_sku} ({normalized_stockx_sku}), Alias={alias_sku} ({normalized_alias_sku})")
+        if stockx_name and alias_name:
+            match_result['warnings'].append(f"Name similarity low: StockX='{stockx_name}', Alias='{alias_name}'")
         
         return match_result
+    
+    def _calculate_name_similarity(self, name1: str, name2: str) -> float:
+        """Calculate similarity between two shoe names using multiple metrics"""
+        if not name1 or not name2:
+            return 0.0
+        
+        # Normalize names
+        name1_clean = re.sub(r'[^\w\s]', ' ', name1.lower()).strip()
+        name2_clean = re.sub(r'[^\w\s]', ' ', name2.lower()).strip()
+        
+        # Split into words
+        words1 = set(name1_clean.split())
+        words2 = set(name2_clean.split())
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        # Calculate Jaccard similarity
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        jaccard = intersection / union if union > 0 else 0.0
+        
+        # Calculate word overlap ratio
+        overlap_ratio = intersection / min(len(words1), len(words2)) if min(len(words1), len(words2)) > 0 else 0.0
+        
+        # Calculate character-level similarity for important words
+        important_words = ['jordan', 'nike', 'dunk', 'air', 'force', 'yeezy', 'adidas', 'retro', 'high', 'low']
+        important_matches = 0
+        important_total = 0
+        
+        for word in important_words:
+            if word in name1_clean and word in name2_clean:
+                important_matches += 1
+            if word in name1_clean or word in name2_clean:
+                important_total += 1
+        
+        important_score = important_matches / important_total if important_total > 0 else 0.0
+        
+        # Weighted combination
+        final_score = (jaccard * 0.4) + (overlap_ratio * 0.4) + (important_score * 0.2)
+        
+        return final_score
+
+    def _search_stockx_enhanced(self, shoe_name: str) -> Tuple[Optional[str], Optional[str], Optional[Dict]]:
+        """Enhanced StockX search with multiple strategies"""
+        try:
+            # Strategy 1: Clean name search
+            search_query = self._clean_shoe_name_for_stockx(shoe_name)
+            print(f"   🔍 Strategy 1 - Clean name search: {search_query}")
+            
+            search_results = self.client.search_products(search_query, page_size=10)
+            
+            if search_results and search_results.get('products'):
+                best_product = self._find_best_stockx_match(search_results['products'], search_query)
+                if best_product:
+                    stockx_sku = best_product.get('style_id') or best_product.get('id')
+                    stockx_name = best_product.get('title')
+                    stockx_data = {
+                        'brand': best_product.get('brand'),
+                        'category': best_product.get('category'),
+                        'release_date': best_product.get('release_date'),
+                        'retail_price': best_product.get('retail_price'),
+                        'colorway': best_product.get('colorway'),
+                        'product_id': best_product.get('product_id')
+                    }
+                    
+                    print(f"   ✅ Found StockX match: {stockx_name}")
+                    if stockx_sku:
+                        print(f"   📋 StockX SKU: {stockx_sku}")
+                    
+                    return stockx_sku, stockx_name, stockx_data
+            
+            # Strategy 2: Try with size context if available
+            if any(suffix in shoe_name.upper() for suffix in ['GS', 'PS', 'TD', 'Y', 'C', 'W']):
+                # Remove size context and try again
+                clean_name = re.sub(r'\s+(GS|PS|TD|Y|C|W)\s*$', '', shoe_name, flags=re.IGNORECASE)
+                clean_name = self._clean_shoe_name_for_stockx(clean_name)
+                print(f"   🔍 Strategy 2 - Without size context: {clean_name}")
+                
+                search_results = self.client.search_products(clean_name, page_size=10)
+                
+                if search_results and search_results.get('products'):
+                    best_product = self._find_best_stockx_match(search_results['products'], clean_name)
+                    if best_product:
+                        stockx_sku = best_product.get('style_id') or best_product.get('id')
+                        stockx_name = best_product.get('title')
+                        stockx_data = {
+                            'brand': best_product.get('brand'),
+                            'category': best_product.get('category'),
+                            'release_date': best_product.get('release_date'),
+                            'retail_price': best_product.get('retail_price'),
+                            'colorway': best_product.get('colorway'),
+                            'product_id': best_product.get('product_id')
+                        }
+                        
+                        print(f"   ✅ Found StockX match (no size context): {stockx_name}")
+                        if stockx_sku:
+                            print(f"   📋 StockX SKU: {stockx_sku}")
+                        
+                        return stockx_sku, stockx_name, stockx_data
+            
+            # Strategy 3: Try variations of the name
+            variations = self._generate_stockx_search_variations(shoe_name)
+            for variation in variations:
+                print(f"   🔍 Strategy 3 - Variation: {variation}")
+                search_results = self.client.search_products(variation, page_size=5)
+                
+                if search_results and search_results.get('products'):
+                    best_product = self._find_best_stockx_match(search_results['products'], variation)
+                    if best_product:
+                        stockx_sku = best_product.get('style_id') or best_product.get('id')
+                        stockx_name = best_product.get('title')
+                        stockx_data = {
+                            'brand': best_product.get('brand'),
+                            'category': best_product.get('category'),
+                            'release_date': best_product.get('release_date'),
+                            'retail_price': best_product.get('retail_price'),
+                            'colorway': best_product.get('colorway'),
+                            'product_id': best_product.get('product_id')
+                        }
+                        
+                        print(f"   ✅ Found StockX match (variation): {stockx_name}")
+                        if stockx_sku:
+                            print(f"   📋 StockX SKU: {stockx_sku}")
+                        
+                        return stockx_sku, stockx_name, stockx_data
+            
+            print("   ❌ No StockX products found with any strategy")
+            return None, None, None
+            
+        except Exception as e:
+            print(f"   ❌ StockX search error: {str(e)}")
+            return None, None, None
+    
+    def _clean_shoe_name_for_stockx(self, shoe_name: str) -> str:
+        """Clean shoe name for StockX search using inventory analyzer strategies"""
+        cleaned = shoe_name.strip()
+
+        # Remove size information
+        cleaned = re.sub(r'\s+\d+(?:\.\d+)?\s*(GS|PS|TD|Y|C|W)?\s*$', '', cleaned, flags=re.IGNORECASE)
+        
+        # Remove common prefixes/suffixes
+        cleaned = re.sub(r'\b(and below|size)\b', '', cleaned, flags=re.IGNORECASE)
+        
+        # Only remove generic condition/quality notes, preserve important details
+        patterns_to_remove = [
+            r'\s*\(slight markings[^)]*\)$',  # Remove condition notes
+            r'\s*\(no box\)$',                # Remove packaging notes
+            r'\s*\(VNDS\)$',                  # Remove condition abbreviations
+            r'\s*\(DS\)$',                    # Remove deadstock notes
+        ]
+
+        for pattern in patterns_to_remove:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+
+        # Preserve important details like years, "without laces", etc.
+        # Only clean up excessive spacing and normalize some terms
+        replacements = {
+            'RETRO HIGH': 'High',     # Normalize retro terms
+            'RETRO LOW': 'Low',       # Normalize retro terms  
+            '1 85': '1',              # Fix spacing issues
+        }
+
+        for old, new in replacements.items():
+            cleaned = cleaned.replace(old, new)
+
+        # Clean up spacing but preserve all meaningful words
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+        return cleaned[:80]  # Increased length to preserve more details
+    
+    def _find_best_stockx_match(self, products: List[Dict], search_query: str) -> Optional[Dict]:
+        """Find the best matching StockX product"""
+        if not products:
+            return None
+        
+        search_words = set(search_query.lower().split())
+        
+        best_score = 0
+        best_product = None
+        
+        for product in products:
+            title = product.get('title', '').lower()
+            brand = product.get('brand', '').lower()
+            
+            # Calculate match score
+            title_words = set(title.split())
+            brand_words = set(brand.split())
+            
+            # Word overlap with title
+            title_overlap = len(search_words.intersection(title_words))
+            title_score = title_overlap / len(search_words) if search_words else 0
+            
+            # Brand match bonus
+            brand_match = len(search_words.intersection(brand_words)) > 0
+            brand_bonus = 0.3 if brand_match else 0
+            
+            # Total score
+            total_score = title_score + brand_bonus
+            
+            if total_score > best_score:
+                best_score = total_score
+                best_product = product
+        
+        # Only return if we have a reasonable match
+        if best_score >= 0.3:  # At least 30% word overlap
+            return best_product
+        
+        return None
+    
+    def _generate_stockx_search_variations(self, shoe_name: str) -> List[str]:
+        """Generate search variations for StockX"""
+        variations = []
+        
+        # Remove common size indicators
+        base_name = re.sub(r'\s+(GS|PS|TD|Y|C|W)\s*$', '', shoe_name, flags=re.IGNORECASE)
+        base_name = self._clean_shoe_name_for_stockx(base_name)
+        
+        # Add base name
+        if base_name != shoe_name:
+            variations.append(base_name)
+        
+        # Try with "Jordan" prefix for Jordan shoes
+        if 'jordan' in base_name.lower() and not base_name.lower().startswith('jordan'):
+            variations.append(f"Jordan {base_name}")
+        
+        # Try with "Air Jordan" prefix
+        if 'jordan' in base_name.lower() and not base_name.lower().startswith('air jordan'):
+            variations.append(f"Air Jordan {base_name.replace('Jordan', '').strip()}")
+        
+        # Try with "Nike" prefix for Nike shoes
+        if any(word in base_name.lower() for word in ['dunk', 'force', 'max']) and not base_name.lower().startswith('nike'):
+            variations.append(f"Nike {base_name}")
+        
+        return variations[:3]  # Limit to 3 variations
 
     def generate_report(self, results: List[Dict]) -> str:
         """Generate a formatted report of the SKU search results"""
