@@ -472,58 +472,154 @@ class SKUFinder:
         return results
 
     def search_alias_for_sku(self, shoe_name: str) -> Dict:
-        """Search Alias API for shoe SKU"""
+        """Search Alias API for shoe SKU with multiple strategies"""
         try:
             headers = {
                 'Authorization': f'Bearer {self.alias_api_key}',
                 'Content-Type': 'application/json'
             }
             
-            # Search Alias API using the catalog search endpoint
-            search_url = f"{self.alias_base_url}/catalog/search"
-            params = {
-                'q': shoe_name,
-                'limit': 5
-            }
+            # Strategy 1: Direct search with original name
+            print(f"      🔍 Strategy 1: Direct search for '{shoe_name}'")
+            search_data = self._try_alias_search(shoe_name, headers)
             
-            response = requests.get(search_url, headers=headers, params=params, timeout=15)
+            if search_data and search_data.get('catalog_items'):
+                catalog_item = search_data['catalog_items'][0]
+                return self._extract_alias_data(catalog_item, "Direct search")
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('catalog_items'):
-                    # Get the best match
-                    catalog_item = data['catalog_items'][0]
-                    
-                    # Try multiple fields for SKU extraction
-                    alias_sku = (catalog_item.get('sku') or 
-                               catalog_item.get('style_id') or 
-                               catalog_item.get('style_code') or 
-                               catalog_item.get('product_id') or 
-                               catalog_item.get('model_number') or 
-                               '')
-                    
-                    # Extract additional data
-                    alias_data = {
-                        'brand': catalog_item.get('brand'),
-                        'category': catalog_item.get('category'),
-                        'release_year': catalog_item.get('release_year'),
-                        'colorway': catalog_item.get('colorway'),
-                        'catalog_id': catalog_item.get('catalog_id'),
-                        'model': catalog_item.get('model'),
-                        'subtitle': catalog_item.get('subtitle')
-                    }
-                    
-                    return {
-                        'sku': alias_sku,
-                        'name': catalog_item.get('name', 'Unknown'),
-                        'success': True,
-                        **alias_data  # Include all the additional data
-                    }
+            # Strategy 2: Clean the shoe name and try again
+            cleaned_name = self._clean_shoe_name_for_alias(shoe_name)
+            if cleaned_name != shoe_name:
+                print(f"      🔍 Strategy 2: Cleaned search for '{cleaned_name}'")
+                search_data = self._try_alias_search(cleaned_name, headers)
+                
+                if search_data and search_data.get('catalog_items'):
+                    catalog_item = search_data['catalog_items'][0]
+                    return self._extract_alias_data(catalog_item, "Cleaned search")
             
-            return {'success': False, 'error': 'No Alias match found'}
+            # Strategy 3: Try with common variations
+            variations = self._generate_search_variations(shoe_name)
+            for variation in variations:
+                print(f"      🔍 Strategy 3: Variation search for '{variation}'")
+                search_data = self._try_alias_search(variation, headers)
+                
+                if search_data and search_data.get('catalog_items'):
+                    catalog_item = search_data['catalog_items'][0]
+                    return self._extract_alias_data(catalog_item, f"Variation: {variation}")
+            
+            return {'success': False, 'error': 'No Alias match found after all strategies'}
             
         except Exception as e:
             return {'success': False, 'error': str(e)}
+    
+    def _try_alias_search(self, query: str, headers: Dict) -> Optional[Dict]:
+        """Try to search Alias API with a given query"""
+        try:
+            # Try the catalog endpoint first (like inventory analyzer)
+            search_response = requests.get(
+                f"{self.alias_base_url}/catalog",
+                headers=headers,
+                params={'query': query, 'limit': 1},
+                timeout=15
+            )
+            
+            if search_response.status_code == 200:
+                return search_response.json()
+            
+            # Fallback to catalog/search endpoint
+            search_response = requests.get(
+                f"{self.alias_base_url}/catalog/search",
+                headers=headers,
+                params={'q': query, 'limit': 1},
+                timeout=15
+            )
+            
+            if search_response.status_code == 200:
+                return search_response.json()
+            
+            return None
+                
+        except Exception as e:
+            print(f"      ⚠️ Alias search error for '{query}': {e}")
+            return None
+    
+    def _clean_shoe_name_for_alias(self, shoe_name: str) -> str:
+        """Clean shoe name for better Alias search results"""
+        # Remove size information
+        cleaned = re.sub(r'\s+\d+(?:\.\d+)?\s*(GS|PS|TD|Y|C|W)?\s*$', '', shoe_name, flags=re.IGNORECASE)
+        
+        # Remove common prefixes/suffixes
+        cleaned = re.sub(r'\b(and below|size)\b', '', cleaned, flags=re.IGNORECASE)
+        
+        # Clean up extra spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        return cleaned
+    
+    def _generate_search_variations(self, shoe_name: str) -> List[str]:
+        """Generate search variations for better Alias matching"""
+        variations = []
+        
+        # Remove size info for variations
+        base_name = re.sub(r'\s+\d+(?:\.\d+)?\s*(GS|PS|TD|Y|C|W)?\s*$', '', shoe_name, flags=re.IGNORECASE)
+        
+        # Common variations
+        if 'jordan' in base_name.lower():
+            variations.extend([
+                f"Air Jordan {base_name.replace('Jordan', '').strip()}",
+                f"Jordan {base_name.replace('Jordan', '').strip()}",
+                base_name.replace('Jordan', 'Air Jordan')
+            ])
+        
+        if 'dunk' in base_name.lower():
+            variations.extend([
+                f"Nike Dunk {base_name.replace('Dunk', '').strip()}",
+                base_name.replace('Dunk', 'Nike Dunk')
+            ])
+        
+        if 'yeezy' in base_name.lower():
+            variations.extend([
+                f"Adidas Yeezy {base_name.replace('Yeezy', '').strip()}",
+                base_name.replace('Yeezy', 'Adidas Yeezy')
+            ])
+        
+        # Add brand prefixes if missing
+        if not any(brand in base_name.lower() for brand in ['nike', 'jordan', 'adidas', 'yeezy']):
+            if 'dunk' in base_name.lower():
+                variations.append(f"Nike {base_name}")
+            elif 'jordan' in base_name.lower():
+                variations.append(f"Air {base_name}")
+        
+        return variations[:3]  # Limit to 3 variations
+    
+    def _extract_alias_data(self, catalog_item: Dict, strategy: str) -> Dict:
+        """Extract data from Alias catalog item"""
+        # Try multiple fields for SKU extraction
+        alias_sku = (catalog_item.get('sku') or 
+                   catalog_item.get('style_id') or 
+                   catalog_item.get('style_code') or 
+                   catalog_item.get('product_id') or 
+                   catalog_item.get('model_number') or 
+                   '')
+        
+        # Extract additional data
+        alias_data = {
+            'brand': catalog_item.get('brand'),
+            'category': catalog_item.get('category'),
+            'release_year': catalog_item.get('release_year'),
+            'colorway': catalog_item.get('colorway'),
+            'catalog_id': catalog_item.get('catalog_id'),
+            'model': catalog_item.get('model'),
+            'subtitle': catalog_item.get('subtitle')
+        }
+        
+        return {
+            'sku': alias_sku,
+            'name': catalog_item.get('name', 'Unknown'),
+            'success': True,
+            'strategy': strategy,
+            **alias_data  # Include all the additional data
+        }
 
     def verify_sku_match(self, stockx_sku: str, alias_sku: str, stockx_name: str, alias_name: str) -> Dict:
         """Verify if SKUs match between StockX and Alias"""
@@ -716,6 +812,88 @@ class SKUFinder:
             report_lines.append(f"{original},{stockx_sku},{stockx_name_escaped},{alias_sku},{alias_name_escaped},{final_sku},{final_name_escaped},{verification_status},{size_context_escaped}")
         
         return "\n".join(report_lines)
+
+    def generate_csv_report(self, results: List[Dict]) -> str:
+        """Generate CSV report with StockX links"""
+        import csv
+        from io import StringIO
+        
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Original Name',
+            'StockX SKU', 
+            'StockX Name',
+            'StockX Link',
+            'Alias SKU',
+            'Alias Name',
+            'Final SKU',
+            'Final Name',
+            'Verification Status',
+            'Size Context',
+            'Search Strategy'
+        ])
+        
+        for result in results:
+            # Get verification status
+            verification_status = "FAILED"
+            if result.get('sku_verification'):
+                verification = result['sku_verification']
+                if verification['skus_match']:
+                    verification_status = "MATCH"
+                elif verification['names_similar']:
+                    verification_status = "SIMILAR"
+                else:
+                    verification_status = "MISMATCH"
+            
+            # Get all SKU and name data
+            stockx_sku = result.get('stockx_sku', '')
+            stockx_name = result.get('stockx_name', '')
+            alias_sku = result.get('alias_sku', '')
+            alias_name = result.get('alias_name', '')
+            final_sku = result.get('found_sku', '')
+            final_name = result.get('found_name', '')
+            
+            # Generate StockX link
+            stockx_link = ""
+            if stockx_sku:
+                # Clean SKU for URL (remove spaces, use dashes)
+                clean_sku = stockx_sku.replace(' ', '-')
+                stockx_link = f"https://stockx.com/{clean_sku}"
+            
+            # Build size context string
+            size_context_str = ""
+            if result.get('size_context'):
+                context_parts = []
+                for size_info in result['size_context']:
+                    context_part = size_info['size']
+                    if size_info['detected_context']:
+                        context_part += f"({size_info['detected_context']})"
+                    elif size_info['suggested_context']:
+                        context_part += f"[{size_info['suggested_context']}]"
+                    context_parts.append(context_part)
+                size_context_str = "; ".join(context_parts)
+            
+            # Get search strategy
+            search_strategy = result.get('alias_data', {}).get('strategy', '') if result.get('alias_data') else ''
+            
+            writer.writerow([
+                result["original_line"],
+                stockx_sku,
+                stockx_name,
+                stockx_link,
+                alias_sku,
+                alias_name,
+                final_sku,
+                final_name,
+                verification_status,
+                size_context_str,
+                search_strategy
+            ])
+        
+        return output.getvalue()
 
 def main():
     """Main function for command line usage"""

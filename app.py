@@ -990,7 +990,7 @@ Nike Air Max 1"
             <li>📊 <strong>Inventory Analysis:</strong> StockX pricing with Alias data (stockx_enhanced_*.csv)</li>
             <li>📈 <strong>Sales Volume Analysis:</strong> Sales velocity and volume data (sales_volume_analysis_*.csv)</li>
             <li>🔍 <strong>Single Shoe Analysis:</strong> Comprehensive reports displayed directly on screen</li>
-            <li>🔍 <strong>SKU Finder:</strong> Find StockX SKUs for shoe names (sku_finder_report_*.txt)</li>
+            <li>🔍 <strong>SKU Finder:</strong> Find StockX SKUs for shoe names (sku_finder_report_*.txt, sku_finder_results_*.csv)</li>
         </ul>
         <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">View & Download All Results</a></p>
         <p><em>⏱️ Processing can take several minutes. Your files remain available even if you close the browser.</em></p>
@@ -1626,7 +1626,18 @@ def find_skus():
                     with open(output_path, 'w') as f:
                         f.write(report)
                     
+                    # Also save as CSV for easy download
+                    csv_file = f"sku_finder_results_{timestamp}.csv"
+                    csv_path = os.path.join('pricing_tools', csv_file)
+                    
+                    # Generate CSV with StockX links
+                    csv_content = finder.generate_csv_report(results)
+                    with open(csv_path, 'w', encoding='utf-8') as f:
+                        f.write(csv_content)
+                    
                     add_output(script_id, f"📁 Report saved: {output_file}")
+                    add_output(script_id, f"📊 CSV results saved: {csv_file}")
+                    add_output(script_id, f"🔗 StockX links included in CSV")
                 except Exception as save_error:
                     add_output(script_id, f"❌ Failed to save report: {save_error}")
                 
