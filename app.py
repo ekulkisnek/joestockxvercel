@@ -1580,38 +1580,64 @@ def find_skus():
         
         def run_sku_finder():
             try:
-                finder = SKUFinder()
-                
-                # Parse the shoe list
                 add_output(script_id, "🔍 SKU FINDER STARTED")
                 add_output(script_id, f"📋 Processing {len(shoe_text.split(chr(10)))} lines...")
                 
-                shoes = finder.parse_shoe_list(shoe_text)
-                add_output(script_id, f"📋 Parsed {len(shoes)} shoes from input")
+                # Initialize SKU finder with error handling
+                try:
+                    finder = SKUFinder()
+                    add_output(script_id, "✅ SKU Finder initialized successfully")
+                except Exception as init_error:
+                    add_output(script_id, f"❌ Failed to initialize SKU Finder: {init_error}")
+                    return
                 
-                # Find SKUs
-                add_output(script_id, "🔍 Searching StockX for SKUs...")
-                results = finder.find_skus(shoes)
+                # Parse the shoe list
+                try:
+                    shoes = finder.parse_shoe_list(shoe_text)
+                    add_output(script_id, f"📋 Parsed {len(shoes)} shoes from input")
+                except Exception as parse_error:
+                    add_output(script_id, f"❌ Failed to parse shoe list: {parse_error}")
+                    return
+                
+                # Find SKUs with timeout protection
+                add_output(script_id, "🔍 Starting SKU search process...")
+                try:
+                    results = finder.find_skus(shoes)
+                    add_output(script_id, "✅ SKU search completed successfully")
+                except Exception as search_error:
+                    add_output(script_id, f"❌ SKU search failed: {search_error}")
+                    return
                 
                 # Generate report
                 add_output(script_id, "📊 Generating report...")
-                report = finder.generate_report(results)
+                try:
+                    report = finder.generate_report(results)
+                    add_output(script_id, "✅ Report generated successfully")
+                except Exception as report_error:
+                    add_output(script_id, f"❌ Failed to generate report: {report_error}")
+                    return
                 
                 # Save report to file
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_file = f"sku_finder_report_{timestamp}.txt"
-                output_path = os.path.join('pricing_tools', output_file)
+                try:
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    output_file = f"sku_finder_report_{timestamp}.txt"
+                    output_path = os.path.join('pricing_tools', output_file)
+                    
+                    with open(output_path, 'w') as f:
+                        f.write(report)
+                    
+                    add_output(script_id, f"📁 Report saved: {output_file}")
+                except Exception as save_error:
+                    add_output(script_id, f"❌ Failed to save report: {save_error}")
                 
-                with open(output_path, 'w') as f:
-                    f.write(report)
-                
-                add_output(script_id, f"📁 Report saved: {output_file}")
                 add_output(script_id, "✅ SKU FINDER COMPLETED")
                 add_output(script_id, "")
                 add_output(script_id, report)
                 
             except Exception as e:
                 add_output(script_id, f"❌ SKU Finder error: {str(e)}")
+                import traceback
+                add_output(script_id, f"🔍 Error details: {traceback.format_exc()}")
             finally:
                 running_processes.pop(script_id, None)
         

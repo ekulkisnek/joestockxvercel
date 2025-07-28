@@ -21,7 +21,13 @@ import requests
 class SKUFinder:
     def __init__(self):
         """Initialize SKU finder with StockX and Alias clients"""
-        self.client = SmartStockXClient()
+        try:
+            self.client = SmartStockXClient()
+            print("✅ StockX client initialized successfully")
+        except Exception as e:
+            print(f"❌ Failed to initialize StockX client: {e}")
+            self.client = None
+            
         self.alias_api_key = "goatapi_167AEOZwPmcFAwZ2RbHv7AaGfSYpdF2wq1zdxzT"
         self.alias_base_url = "https://api.alias.org/api/v1"
         print("🔍 SKU Finder initialized with StockX + Alias integration")
@@ -106,16 +112,17 @@ class SKUFinder:
                 pass
         
         # Then look for standalone size patterns (but be more conservative)
-        # Only match sizes that are likely to be actual shoe sizes
-        standalone_sizes = re.findall(r'\b(?:^|\s)(\d{1,2}(?:\.\d)?(?:x\d+)?(?:[wWyYcC])?)(?:\s|$)', cleaned_line)
+        # Only match sizes that are likely to be actual shoe sizes and are at the end of the line
+        # This prevents matching numbers that are part of the shoe name
+        standalone_sizes = re.findall(r'\b(\d{1,2}(?:\.\d)?)\s*$', cleaned_line)
         for size in standalone_sizes:
             # Only include if it looks like a reasonable shoe size (1-20 range)
             try:
-                size_num = float(size.replace('x', '').replace('w', '').replace('y', '').replace('c', ''))
+                size_num = float(size)
                 if 1 <= size_num <= 20:
                     sizes.append(size)
                     # Remove this specific size from the line
-                    cleaned_line = re.sub(rf'\b{re.escape(size)}\b', '', cleaned_line)
+                    cleaned_line = re.sub(rf'\b{re.escape(size)}\s*$', '', cleaned_line)
             except ValueError:
                 pass
         
@@ -292,8 +299,12 @@ class SKUFinder:
         print(f"📋 Input data includes: {sum(1 for s in shoes if s.get('quantity'))} items with quantities, {sum(1 for s in shoes if s.get('sizes'))} items with sizes")
         
         results = []
+        successful_searches = 0
+        failed_searches = 0
+        
         for i, shoe in enumerate(shoes, 1):
             print(f"\n🔍 [{i}/{len(shoes)}] Processing: {shoe['shoe_name']}")
+            print(f"   📊 Progress: {successful_searches} successful, {failed_searches} failed")
             
             # Show input data details
             if shoe.get('quantity'):
@@ -307,9 +318,21 @@ class SKUFinder:
                 print(f"   🏷️  Input SKU: {shoe['sku']}")
             
             try:
-                # Search StockX for the shoe
-                print(f"   📊 Searching StockX API...")
-                search_results = self.client.search_products(shoe['shoe_name'], page_size=5)
+                # Check if StockX client is available
+                if not self.client:
+                    print(f"   ❌ StockX client not available - skipping StockX search")
+                    stockx_sku = None
+                    stockx_name = None
+                    stockx_data = {}
+                else:
+                    # Search StockX for the shoe
+                    print(f"   📊 Searching StockX API...")
+                    try:
+                        search_results = self.client.search_products(shoe['shoe_name'], page_size=5)
+                        print(f"   ✅ StockX API call completed")
+                    except Exception as stockx_error:
+                        print(f"   ❌ StockX API error: {stockx_error}")
+                        search_results = None
                 
                 stockx_sku = None
                 stockx_name = None
@@ -347,7 +370,12 @@ class SKUFinder:
                 
                 # Search Alias for the shoe
                 print(f"   🔍 Searching Alias API...")
-                alias_results = self.search_alias_for_sku(shoe['shoe_name'])
+                try:
+                    alias_results = self.search_alias_for_sku(shoe['shoe_name'])
+                    print(f"   ✅ Alias API call completed")
+                except Exception as alias_error:
+                    print(f"   ❌ Alias API error: {alias_error}")
+                    alias_results = {'success': False, 'error': str(alias_error)}
                 
                 alias_sku = None
                 alias_name = None
@@ -409,6 +437,7 @@ class SKUFinder:
                     shoe['alias_sku'] = alias_sku
                     shoe['alias_name'] = alias_name
                     shoe['search_success'] = True
+                    successful_searches += 1
                     
                     print(f"   ✅ Final Result:")
                     print(f"      🏷️  Final SKU: {shoe['found_sku']}")
@@ -417,11 +446,13 @@ class SKUFinder:
                     
                 else:
                     shoe['error'] = 'No matches found on either platform'
+                    failed_searches += 1
                     print(f"   ❌ No matches found on either platform")
                     print(f"   💡 Try: Check spelling, use more specific name, or verify shoe exists")
                 
             except Exception as e:
                 shoe['error'] = str(e)
+                failed_searches += 1
                 print(f"   ❌ Error searching for {shoe['shoe_name']}: {e}")
                 print(f"   💡 Try: Check internet connection or API status")
             
@@ -431,6 +462,12 @@ class SKUFinder:
             if i < len(shoes):
                 print(f"   ⏳ Waiting 2 seconds before next search...")
                 time.sleep(2)
+        
+        # Final summary
+        print(f"\n📊 SKU FINDER COMPLETED")
+        print(f"   ✅ Successful searches: {successful_searches}")
+        print(f"   ❌ Failed searches: {failed_searches}")
+        print(f"   📈 Success rate: {(successful_searches/max(len(shoes), 1)*100):.1f}%")
         
         return results
 
@@ -449,7 +486,7 @@ class SKUFinder:
                 'limit': 5
             }
             
-            response = requests.get(search_url, headers=headers, params=params, timeout=10)
+            response = requests.get(search_url, headers=headers, params=params, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
