@@ -674,6 +674,20 @@ def run_script_async(script_id, command, working_dir=None):
         except:
             pass
 
+def add_output(script_id: str, message: str):
+    """Add output message to process outputs and emit via WebSocket"""
+    if script_id not in process_outputs:
+        process_outputs[script_id] = []
+    
+    process_outputs[script_id].append(message)
+    
+    # Emit via WebSocket
+    socketio.emit('process_output', {
+        'script_id': script_id,
+        'line': message,
+        'status': 'running'
+    })
+
 # HTML template for the web interface
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -930,6 +944,25 @@ White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)"
             <p><small><strong>Features:</strong> StockX pricing, Alias insights, sales velocity, size-by-size breakdown, market recommendations</small></p>
         </div>
         
+        <h3>🔍 SKU Finder</h3>
+        <!-- SKU Finder -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>🔍 Find StockX SKUs</h4>
+            <p><em>Paste a list of shoe names and get their corresponding StockX SKUs and official names</em></p>
+            <form action="/find_skus" method="post" style="margin: 10px 0;">
+                <label for="shoe_text">Paste your shoe list:</label><br>
+                <textarea name="shoe_text" id="shoe_text" rows="8" cols="60" 
+                         placeholder="Jordan 1 Chicago
+Nike Dunk Low Panda
+Yeezy Boost 350 Cream
+Air Jordan 4 White Cement
+Nike Air Max 1"
+                         style="margin: 5px 0; width: 100%; font-family: monospace;" required></textarea><br>
+                <input type="submit" value="🔍 Find SKUs" class="upload-button">
+            </form>
+            <p><small><strong>Features:</strong> Smart parsing, StockX SKU lookup, official name matching, CSV export format, success rate tracking</small></p>
+        </div>
+        
         <h3>📈 Sales Volume Analysis</h3>
         <!-- Sales Volume CSV Upload -->
         <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
@@ -957,6 +990,7 @@ White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)"
             <li>📊 <strong>Inventory Analysis:</strong> StockX pricing with Alias data (stockx_enhanced_*.csv)</li>
             <li>📈 <strong>Sales Volume Analysis:</strong> Sales velocity and volume data (sales_volume_analysis_*.csv)</li>
             <li>🔍 <strong>Single Shoe Analysis:</strong> Comprehensive reports displayed directly on screen</li>
+            <li>🔍 <strong>SKU Finder:</strong> Find StockX SKUs for shoe names (sku_finder_report_*.txt)</li>
         </ul>
         <p><a href="/downloads" style="padding: 5px 10px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">View & Download All Results</a></p>
         <p><em>⏱️ Processing can take several minutes. Your files remain available even if you close the browser.</em></p>
@@ -1515,6 +1549,82 @@ def analyze_single_shoe():
         
     except Exception as e:
         flash(f'Analysis error: {str(e)}')
+        return redirect(url_for('index'))
+
+@app.route('/find_skus', methods=['POST'])
+def find_skus():
+    """Handle SKU finder - REQUIRES AUTHENTICATION"""
+    shoe_text = request.form.get('shoe_text', '').strip()
+    
+    if not shoe_text:
+        flash('Please paste your shoe list')
+        return redirect(url_for('index'))
+    
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, recovery_action = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ SKU FINDER BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+    
+    try:
+        # Create script ID for tracking
+        script_id = f"sku_finder_{datetime.now().strftime('%H%M%S')}"
+        
+        # Import and run SKU finder
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from sku_finder import SKUFinder
+        
+        # Initialize process tracking
+        running_processes[script_id] = True
+        process_outputs[script_id] = []
+        
+        def run_sku_finder():
+            try:
+                finder = SKUFinder()
+                
+                # Parse the shoe list
+                add_output(script_id, "🔍 SKU FINDER STARTED")
+                add_output(script_id, f"📋 Processing {len(shoe_text.split(chr(10)))} lines...")
+                
+                shoes = finder.parse_shoe_list(shoe_text)
+                add_output(script_id, f"📋 Parsed {len(shoes)} shoes from input")
+                
+                # Find SKUs
+                add_output(script_id, "🔍 Searching StockX for SKUs...")
+                results = finder.find_skus(shoes)
+                
+                # Generate report
+                add_output(script_id, "📊 Generating report...")
+                report = finder.generate_report(results)
+                
+                # Save report to file
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                output_file = f"sku_finder_report_{timestamp}.txt"
+                output_path = os.path.join('pricing_tools', output_file)
+                
+                with open(output_path, 'w') as f:
+                    f.write(report)
+                
+                add_output(script_id, f"📁 Report saved: {output_file}")
+                add_output(script_id, "✅ SKU FINDER COMPLETED")
+                add_output(script_id, "")
+                add_output(script_id, report)
+                
+            except Exception as e:
+                add_output(script_id, f"❌ SKU Finder error: {str(e)}")
+            finally:
+                running_processes.pop(script_id, None)
+        
+        # Start SKU finder in background thread
+        thread = threading.Thread(target=run_sku_finder)
+        thread.daemon = True
+        thread.start()
+        
+        flash(f'🔍 SKU Finder started! Check the outputs section for results.')
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        flash(f'SKU Finder error: {str(e)}')
         return redirect(url_for('index'))
 
 def render_single_shoe_analysis(result: dict) -> str:
