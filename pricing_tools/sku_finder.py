@@ -878,7 +878,8 @@ class SKUFinder:
                         'release_date': best_product.get('release_date'),
                         'retail_price': best_product.get('retail_price'),
                         'colorway': best_product.get('colorway'),
-                        'product_id': best_product.get('product_id')
+                        'product_id': best_product.get('product_id'),
+                        'url_key': best_product.get('url_key')
                     }
                     
                     print(f"   ✅ Found StockX match: {stockx_name}")
@@ -907,7 +908,8 @@ class SKUFinder:
                             'release_date': best_product.get('release_date'),
                             'retail_price': best_product.get('retail_price'),
                             'colorway': best_product.get('colorway'),
-                            'product_id': best_product.get('product_id')
+                            'product_id': best_product.get('product_id'),
+                            'url_key': best_product.get('url_key')
                         }
                         
                         print(f"   ✅ Found StockX match (no size context): {stockx_name}")
@@ -933,7 +935,8 @@ class SKUFinder:
                             'release_date': best_product.get('release_date'),
                             'retail_price': best_product.get('retail_price'),
                             'colorway': best_product.get('colorway'),
-                            'product_id': best_product.get('product_id')
+                            'product_id': best_product.get('product_id'),
+                            'url_key': best_product.get('url_key')
                         }
                         
                         print(f"   ✅ Found StockX match (variation): {stockx_name}")
@@ -1251,10 +1254,13 @@ class SKUFinder:
             final_sku = result.get('found_sku', '')
             final_name = result.get('found_name', '')
             
-            # Generate StockX link
+            # Generate StockX link using url_key from StockX data
             stockx_link = ""
-            if stockx_sku:
-                # Clean SKU for URL (remove spaces, use dashes)
+            if result.get('stockx_data', {}).get('url_key'):
+                # Use the url_key from StockX product data (this is the correct way)
+                stockx_link = f"https://stockx.com/{result['stockx_data']['url_key']}"
+            elif stockx_sku:
+                # Fallback: try to use SKU if url_key is not available
                 clean_sku = stockx_sku.replace(' ', '-')
                 stockx_link = f"https://stockx.com/{clean_sku}"
             
