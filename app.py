@@ -1981,6 +1981,33 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                 </div>
                 
+                <!-- Key Pricing Information -->
+                <div class="calculation-step" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-left: 5px solid #ffd700;">
+                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">💰 KEY PRICING INFORMATION</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📈 StockX Bid</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #4CAF50;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_bid', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📊 StockX Ask</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #FF9800;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🛒 GOAT Ask Used</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #2196F3;">${calculations.get('step_5_alias_comparison', {}).get('goat_ask_used', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📦 GOAT Consignment</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #9C27B0;">${calculations.get('step_5_alias_comparison', {}).get('goat_consignment', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🚚 GOAT Ship to Verify</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #607D8B;">${calculations.get('step_5_alias_comparison', {}).get('goat_ship_to_verify', 'N/A')}</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Verification Information -->
                 <div class="calculation-step">
                     <h3>🔍 Verification Information</h3>
