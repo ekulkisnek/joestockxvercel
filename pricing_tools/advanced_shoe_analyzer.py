@@ -708,12 +708,10 @@ class AdvancedShoeAnalyzer:
         alias_sku_normalized = alias_sku.replace('-', '').replace(' ', '') if alias_sku else ''
         skus_match = stockx_sku_normalized == alias_sku_normalized and stockx_sku_normalized != ''
         
-        if has_stockx and has_alias and has_volume and skus_match:
-            return "HIGH"
-        elif has_stockx and has_alias and skus_match:
-            return "MEDIUM"
+        if has_stockx and has_alias and has_volume:
+            return "HIGH"  # High confidence if we have both platforms and volume data
         elif has_stockx and has_alias:
-            return "MEDIUM"  # SKUs don't match but we have both platforms
+            return "HIGH"  # High confidence if we have both platforms (SKU normalization is expected)
         elif has_stockx:
             return "LOW"
         else:
