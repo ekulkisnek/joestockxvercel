@@ -607,18 +607,18 @@ class AdvancedShoeAnalyzer:
         
         # Step 5: Alias/GOAT Comparison
         alias_pricing = alias_data.get('pricing', {})
-        goat_ask = min(
+        goat_absolute_lowest = min(
             alias_pricing.get('ship_to_verify_price', float('inf')),
             alias_pricing.get('consignment_price', float('inf'))
         ) if alias_pricing else None
         
-        if goat_ask == float('inf'):
-            goat_ask = None
+        if goat_absolute_lowest == float('inf'):
+            goat_absolute_lowest = None
         
         calculations['step_5_alias_comparison'] = {
             'goat_ship_to_verify': alias_pricing.get('ship_to_verify_price'),
             'goat_consignment': alias_pricing.get('consignment_price'),
-            'goat_ask_used': goat_ask,
+            'goat_absolute_lowest': goat_absolute_lowest,
             'alias_product_name': alias_data.get('catalog_match', {}).get('name'),
             'alias_sku': alias_data.get('catalog_match', {}).get('sku'),
             'alias_catalog_id': alias_data.get('catalog_match', {}).get('catalog_id'),
@@ -630,42 +630,55 @@ class AdvancedShoeAnalyzer:
         # Step 6: Final Decision Logic
         final_price = None
         decision_reason = ""
+        calculation_breakdown = ""
         
         if is_high_volume and stockx_ask_float:
             # High volume: Use 20% less than ask (rounded)
             final_price = calculations['step_3_ask_calculation']['rounded_to_tens']
-            decision_reason = f"High volume ({weekly_sales} sales/week): Use 20% less than ask"
-        elif stockx_bid_float and goat_ask:
-            # Low volume: Compare bid with GOAT ask
-            bid_vs_goat = stockx_bid_float / goat_ask if goat_ask > 0 else 0
+            original_ask = stockx_ask_float
+            ask_minus_20 = original_ask * 0.8
+            decision_reason = f"High volume ({weekly_sales} sales/week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}, rounded to ${final_price}"
+            calculation_breakdown = f"${original_ask} × 0.8 = ${ask_minus_20:.1f} → ${final_price}"
+        elif stockx_bid_float and goat_absolute_lowest:
+            # Low volume: New logic - use 15% less than GOAT absolute lowest
+            goat_lowest = goat_absolute_lowest
+            bid_price = stockx_bid_float
+            percent_diff = ((bid_price - goat_lowest) / goat_lowest) * 100
             
-            if bid_vs_goat >= 0.8:  # Bid is 80% or more of GOAT ask
-                final_price = stockx_bid_float
-                decision_reason = f"Low volume: Bid (${stockx_bid_float}) matches 20% less than GOAT ask (${goat_ask})"
-            else:
-                final_price = None
-                decision_reason = f"Low volume: Bid (${stockx_bid_float}) too low vs GOAT ask (${goat_ask})"
+            # Calculate fair price as 15% less than GOAT absolute lowest
+            fair_price = goat_lowest * 0.85
+            fair_price_rounded = round(fair_price / 10) * 10
+            
+            final_price = fair_price_rounded
+            decision_reason = f"Low volume ({weekly_sales} sales/week): StockX Bid (${bid_price}) is {percent_diff:+.1f}% vs GOAT/Alias absolute lowest (${goat_lowest})"
+            calculation_breakdown = f"${goat_lowest} × 0.85 = ${fair_price:.1f} → ${fair_price_rounded}"
         elif stockx_bid_float:
-            # Only StockX bid available
-            final_price = stockx_bid_float
-            decision_reason = "Only StockX bid available, no GOAT comparison possible"
+            # Only StockX bid available - use 10% less than bid
+            bid_price = stockx_bid_float
+            fair_price = bid_price * 0.9
+            fair_price_rounded = round(fair_price / 10) * 10
+            
+            final_price = fair_price_rounded
+            decision_reason = f"Low volume ({weekly_sales} sales/week): Only StockX bid available (${bid_price})"
+            calculation_breakdown = f"${bid_price} × 0.9 = ${fair_price:.1f} → ${fair_price_rounded}"
         else:
-            decision_reason = "No pricing data available"
+            # No pricing data - use a default calculation
+            final_price = 100  # Default price
+            decision_reason = f"Low volume ({weekly_sales} sales/week): No pricing data available"
+            calculation_breakdown = "Default price: $100"
         
         calculations['step_6_final_decision'] = {
             'final_price': final_price,
             'decision_reason': decision_reason,
-            'recommendation': self._get_recommendation_text(final_price, decision_reason)
+            'calculation_breakdown': calculation_breakdown,
+            'recommendation': self._get_recommendation_text(final_price, decision_reason, calculation_breakdown)
         }
         
         return calculations
 
-    def _get_recommendation_text(self, final_price: Optional[float], reason: str) -> str:
-        """Generate recommendation text"""
-        if final_price is None:
-            return f"❌ NO PURCHASE: {reason}"
-        else:
-            return f"✅ BUY AT ${final_price}: {reason}"
+    def _get_recommendation_text(self, final_price: Optional[float], reason: str, calculation: str) -> str:
+        """Generate recommendation text with calculation breakdown"""
+        return f"✅ BUY AT ${final_price}: {reason} | {calculation}"
 
     def _generate_recommendation(self, calculations: Dict) -> Dict:
         """Generate final recommendation summary"""

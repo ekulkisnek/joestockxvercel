@@ -1994,8 +1994,8 @@ def render_advanced_analysis(result: dict) -> str:
                             <div style="font-size: 2em; font-weight: bold; color: #FF9800;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🛒 GOAT Ask Used</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #2196F3;">${calculations.get('step_5_alias_comparison', {}).get('goat_ask_used', 'N/A')}</div>
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🎯 GOAT Absolute Lowest</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #2196F3;">${calculations.get('step_5_alias_comparison', {}).get('goat_absolute_lowest', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📦 GOAT Consignment</h4>
@@ -2077,6 +2077,17 @@ def render_advanced_analysis(result: dict) -> str:
                 <!-- Step 6: Final Decision -->
                 {build_calculation_step_html('Step 6: Final Decision Logic', calculations.get('step_6_final_decision', {}))}
                 
+                <!-- Calculated Data Section -->
+                <div class="calculation-step" style="background: #f8f9fa; border-left: 5px solid #6c757d;">
+                    <h3>🧮 CALCULATED DATA</h3>
+                    <div class="calculation-detail">
+                        <h4>Our Calculations:</h4>
+                        <pre style="background: #e9ecef; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.9em;">
+{json.dumps(calculations, indent=2)}
+                        </pre>
+                    </div>
+                </div>
+                
                 <!-- Raw Data Section -->
                 <div class="calculation-step">
                     <h3>📊 Raw Data</h3>
@@ -2087,6 +2098,89 @@ def render_advanced_analysis(result: dict) -> str:
                     <div class="calculation-detail">
                         <h4>Alias/GOAT Data:</h4>
                         <pre>{json.dumps(raw_data.get('alias', {}), indent=2)}</pre>
+                    </div>
+                </div>
+                
+                <!-- API Documentation -->
+                <div class="calculation-step" style="background: #f8f9fa; border-left: 5px solid #17a2b8;">
+                    <h3>📚 API VARIABLES DOCUMENTATION</h3>
+                    
+                    <div class="calculation-detail">
+                        <h4>🟠 ALIAS/GOAT API VARIABLES</h4>
+                        <p><strong>Endpoint:</strong> <code>https://api.alias.org/api/v1/pricing_insights/availability</code></p>
+                        
+                        <h5>Overall Availability (Ship-to-Verify):</h5>
+                        <ul>
+                            <li><code>lowest_listing_price_cents</code> - Lowest price to ship to GOAT</li>
+                            <li><code>highest_offer_price_cents</code> - Highest offer GOAT will pay</li>
+                            <li><code>last_sold_listing_price_cents</code> - Price of most recent sale</li>
+                            <li><code>global_indicator_price_cents</code> - GOAT's suggested price</li>
+                        </ul>
+                        
+                        <h5>Consigned Availability (<code>?consigned=true</code>):</h5>
+                        <ul>
+                            <li><code>lowest_listing_price_cents</code> - Lowest price for items GOAT already has</li>
+                            <li><code>highest_offer_price_cents</code> - Highest offer for consigned items</li>
+                            <li><code>last_sold_listing_price_cents</code> - Price of most recent consigned sale</li>
+                            <li><code>global_indicator_price_cents</code> - GOAT's suggested price for consigned</li>
+                        </ul>
+                        
+                        <h5>Recent Sales (<code>/pricing_insights/recent_sales</code>):</h5>
+                        <ul>
+                            <li><code>price_cents</code> - Sale price in cents</li>
+                            <li><code>purchased_at</code> - Sale timestamp</li>
+                            <li><code>product_condition</code> - Condition of sold item</li>
+                            <li><code>packaging_condition</code> - Packaging condition</li>
+                        </ul>
+                        
+                        <h5>Catalog Search (<code>/catalog</code>):</h5>
+                        <ul>
+                            <li><code>catalog_id</code> - Unique product identifier</li>
+                            <li><code>name</code> - Product name</li>
+                            <li><code>sku</code> - Product SKU</li>
+                            <li><code>brand</code> - Brand name</li>
+                            <li><code>gender</code> - Target gender</li>
+                            <li><code>release_date</code> - Release date</li>
+                            <li><code>product_category</code> - Product category</li>
+                            <li><code>product_type</code> - Product type</li>
+                            <li><code>size_unit</code> - Size unit system</li>
+                            <li><code>allowed_sizes</code> - Available sizes</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="calculation-detail">
+                        <h4>🔵 STOCKX API VARIABLES</h4>
+                        <p><strong>Endpoint:</strong> <code>https://stockx.com/api/products/</code></p>
+                        
+                        <h5>Product Data:</h5>
+                        <ul>
+                            <li><code>stockx_bid</code> - Current highest bid</li>
+                            <li><code>stockx_ask</code> - Current lowest ask</li>
+                            <li><code>stockx_shoe_name</code> - Product name</li>
+                            <li><code>stockx_sku</code> - Product SKU</li>
+                            <li><code>stockx_url</code> - Product URL</li>
+                            <li><code>last_sale</code> - Most recent sale price</li>
+                            <li><code>total_sold</code> - Total units sold</li>
+                            <li><code>volatility</code> - Price volatility metric</li>
+                        </ul>
+                        
+                        <h5>Market Data:</h5>
+                        <ul>
+                            <li><code>bid_ask_spread</code> - Difference between bid and ask</li>
+                            <li><code>market_cap</code> - Market capitalization</li>
+                            <li><code>trading_volume</code> - Trading volume</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="calculation-detail">
+                        <h4>❓ DATA AVAILABILITY CHECK</h4>
+                        <p><strong>For this analysis:</strong></p>
+                        <ul>
+                            <li>✅ <strong>StockX Data:</strong> {len(raw_data.get('stockx', {}))} variables retrieved</li>
+                            <li>✅ <strong>Alias Data:</strong> {len(raw_data.get('alias', {}))} variables retrieved</li>
+                            <li>✅ <strong>Sales Volume:</strong> {len(raw_data.get('alias', {}).get('sales_volume', {}))} metrics available</li>
+                            <li>✅ <strong>Pricing Data:</strong> {len(raw_data.get('alias', {}).get('pricing', {}))} price points available</li>
+                        </ul>
                     </div>
                 </div>
             </div>
