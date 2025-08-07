@@ -162,7 +162,8 @@ def get_replit_url():
         return url
     
     # Fallback for local development  
-    url = 'http://localhost:5000'
+    port = os.getenv('PORT', '5000')
+    url = f'http://localhost:{port}'
     print(f"🏠 Local development URL: {url}")
     return url
 
@@ -3470,8 +3471,11 @@ def handle_request_output(data):
 
 if __name__ == '__main__':
     try:
+        # Get port from environment variable (Replit uses PORT=5000)
+        port = int(os.getenv('PORT', 5000))
+        
         print("🌐 Starting StockX Tools Web Interface...")
-        print("📱 Access at: http://0.0.0.0:8080")
+        print(f"📱 Access at: http://0.0.0.0:{port}")
         print("🔄 Real-time updates via WebSocket")
         print("=" * 50)
         
@@ -3482,10 +3486,13 @@ if __name__ == '__main__':
             print(f"⚠️ Warning: Could not start token refresh thread: {e}")
         
         # Use SocketIO instead of regular Flask with production fixes
+        # Get port from environment variable (Replit uses PORT=5000)
+        port = int(os.getenv('PORT', 5000))
+        
         socketio.run(
             app, 
             host='0.0.0.0', 
-            port=8080, 
+            port=port, 
             debug=False,
             allow_unsafe_werkzeug=True,  # Fix for production deployment
             use_reloader=False,          # Prevent reloader issues in production
@@ -3496,10 +3503,11 @@ if __name__ == '__main__':
         print("🔄 Attempting fallback server configuration...")
         try:
             # Fallback configuration without unsafe_werkzeug
+            port = int(os.getenv('PORT', 5000))
             socketio.run(
                 app, 
                 host='0.0.0.0', 
-                port=8080, 
+                port=port, 
                 debug=False,
                 use_reloader=False
             )
