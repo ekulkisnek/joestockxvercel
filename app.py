@@ -2077,11 +2077,126 @@ def render_advanced_analysis(result: dict) -> str:
                 <!-- Step 6: Final Decision -->
                 {build_calculation_step_html('Step 6: Final Decision Logic', calculations.get('step_6_final_decision', {}))}
                 
+                <!-- Pricing Calculation Explanations -->
+                <div class="calculation-step" style="background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; border-left: 5px solid #f1c40f;">
+                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">🧮 PRICING CALCULATION EXPLANATIONS</h3>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f1c40f;">📈 HIGH VOLUME PRICING (≥3 sales/week)</h4>
+                        <p><strong>When to use:</strong> When weekly sales are 3 or more</p>
+                        <p><strong>Formula:</strong> StockX Ask × 0.8 → rounded to nearest $10</p>
+                        <p><strong>What you pay:</strong> 20% less than StockX ask price</p>
+                        <p><strong>Example:</strong> StockX Ask $192 × 0.8 = $153.6 → $150</p>
+                        <p><strong>Logic:</strong> High volume means quick turnover, so we can be more aggressive with pricing</p>
+                    </div>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f1c40f;">📉 LOW VOLUME PRICING (<3 sales/week)</h4>
+                        <p><strong>When to use:</strong> When weekly sales are less than 3</p>
+                        <p><strong>Formula:</strong> GOAT Absolute Lowest × 0.85 → rounded to nearest $10</p>
+                        <p><strong>What you pay:</strong> 15% less than GOAT's absolute lowest price</p>
+                        <p><strong>Example:</strong> GOAT Lowest $481 × 0.85 = $408.8 → $410</p>
+                        <p><strong>Logic:</strong> Low volume means slower turnover, so we need to be more conservative and base pricing on GOAT's market</p>
+                    </div>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f1c40f;">🔍 STOCKX ONLY PRICING</h4>
+                        <p><strong>When to use:</strong> When only StockX data is available (no GOAT data)</p>
+                        <p><strong>Formula:</strong> StockX Bid × 0.9 → rounded to nearest $10</p>
+                        <p><strong>What you pay:</strong> 10% less than StockX bid price</p>
+                        <p><strong>Example:</strong> StockX Bid $240 × 0.9 = $216 → $220</p>
+                        <p><strong>Logic:</strong> Conservative approach when we only have one data source</p>
+                    </div>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f1c40f;">❓ NO DATA PRICING</h4>
+                        <p><strong>When to use:</strong> When no pricing data is available</p>
+                        <p><strong>Formula:</strong> Default price of $100</p>
+                        <p><strong>What you pay:</strong> $100 (placeholder price)</p>
+                        <p><strong>Logic:</strong> Fallback price when no market data exists</p>
+                    </div>
+                </div>
+                
+                <!-- Platform Fees Section -->
+                <div class="calculation-step" style="background: linear-gradient(135deg, #e67e22, #d35400); color: white; border-left: 5px solid #f39c12;">
+                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">💰 PLATFORM FEES & COSTS</h3>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f39c12;">🟠 GOAT/ALIAS FEES</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li>📦 <strong>Ship to Verify:</strong> 9.5% + $5.00 processing fee</li>
+                            <li>🏪 <strong>Consignment:</strong> 9.5% + $5.00 processing fee</li>
+                            <li>💳 <strong>Payment Processing:</strong> 2.9% + $0.30 per transaction</li>
+                            <li>📤 <strong>Shipping to GOAT:</strong> Free (GOAT provides label)</li>
+                            <li>📥 <strong>Shipping to Buyer:</strong> Free (included in fees)</li>
+                            <li>🔍 <strong>Authentication:</strong> Included in processing fee</li>
+                        </ul>
+                        <p><strong>Total GOAT Fees:</strong> ~12.4% + $5.30 per sale</p>
+                    </div>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f39c12;">🔵 STOCKX FEES</h4>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li>💼 <strong>Seller Fee:</strong> 9.5% for most items</li>
+                            <li>💳 <strong>Payment Processing:</strong> 3% + $0.30 per transaction</li>
+                            <li>📤 <strong>Shipping to StockX:</strong> Free (StockX provides label)</li>
+                            <li>📥 <strong>Shipping to Buyer:</strong> Free (included in fees)</li>
+                            <li>🔍 <strong>Authentication:</strong> Included in seller fee</li>
+                            <li>⚡ <strong>Instant Sale:</strong> Additional 2% fee</li>
+                        </ul>
+                        <p><strong>Total StockX Fees:</strong> ~12.5% + $0.30 per sale</p>
+                    </div>
+                    
+                    <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
+                        <h4 style="color: #f39c12;">📊 FEE COMPARISON</h4>
+                        <p><strong>GOAT vs StockX:</strong> Very similar fee structures (~12.4-12.5%)</p>
+                        <p><strong>Key Differences:</strong></p>
+                        <ul style="list-style: none; padding-left: 0;">
+                            <li>• GOAT has higher base processing fee ($5.00 vs $0.30)</li>
+                            <li>• StockX has instant sale option with additional 2% fee</li>
+                            <li>• Both include authentication and shipping in base fees</li>
+                        </ul>
+                        <p><strong>Profit Margin Consideration:</strong> Our pricing calculations account for these fees to ensure profitable sales</p>
+                    </div>
+                </div>
+                
                 <!-- Calculated Data Section -->
                 <div class="calculation-step" style="background: #f8f9fa; border-left: 5px solid #6c757d;">
                     <h3>🧮 CALCULATED DATA</h3>
                     <div class="calculation-detail">
-                        <h4>Our Calculations:</h4>
+                        <h4>How Each Calculation Was Derived:</h4>
+                        
+                        <div style="background: #e9ecef; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.9em;">
+                            <h5>📊 Step 1: StockX Analysis</h5>
+                            <p>• <strong>StockX Bid:</strong> ${calculations.get('step_1_stockx_analysis', {}).get('stockx_bid', 'N/A')} (from StockX API)</p>
+                            <p>• <strong>StockX Ask:</strong> ${calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 'N/A')} (from StockX API)</p>
+                            <p>• <strong>Bid-Ask Spread:</strong> ${calculations.get('step_1_stockx_analysis', {}).get('bid_ask_spread', 'N/A')} (Ask - Bid)</p>
+                            
+                            <h5>📈 Step 2: Volume Check</h5>
+                            <p>• <strong>Weekly Sales:</strong> {calculations.get('step_2_volume_check', {}).get('weekly_sales', 'N/A')} (from Alias API)</p>
+                            <p>• <strong>High Volume:</strong> {calculations.get('step_2_volume_check', {}).get('is_high_volume', 'N/A')} (≥3 sales/week)</p>
+                            <p>• <strong>Threshold:</strong> {calculations.get('step_2_volume_check', {}).get('threshold', 'N/A')} sales/week</p>
+                            
+                            <h5>🧮 Step 3: Ask Calculation (High Volume)</h5>
+                            <p>• <strong>Original Ask:</strong> ${calculations.get('step_3_ask_calculation', {}).get('original_ask', 'N/A')}</p>
+                            <p>• <strong>20% Reduction:</strong> ${calculations.get('step_3_ask_calculation', {}).get('ask_minus_20_percent', 'N/A')} (Ask × 0.8)</p>
+                            <p>• <strong>Rounded Price:</strong> ${calculations.get('step_3_ask_calculation', {}).get('rounded_to_tens', 'N/A')} (nearest $10)</p>
+                            
+                            <h5>💎 Step 4: Bid Analysis</h5>
+                            <p>• <strong>StockX Bid:</strong> {calculations.get('step_4_bid_analysis', {}).get('stockx_bid', 'N/A')} (current market bid)</p>
+                            
+                            <h5>🟠 Step 5: Alias/GOAT Comparison</h5>
+                            <p>• <strong>Ship to Verify:</strong> ${calculations.get('step_5_alias_comparison', {}).get('goat_ship_to_verify', 'N/A')} (from Alias API)</p>
+                            <p>• <strong>Consignment:</strong> ${calculations.get('step_5_alias_comparison', {}).get('goat_consignment', 'N/A')} (from Alias API)</p>
+                            <p>• <strong>Absolute Lowest:</strong> ${calculations.get('step_5_alias_comparison', {}).get('goat_absolute_lowest', 'N/A')} (min of above two)</p>
+                            
+                            <h5>🎯 Step 6: Final Decision</h5>
+                            <p>• <strong>Final Price:</strong> ${calculations.get('step_6_final_decision', {}).get('final_price', 'N/A')}</p>
+                            <p>• <strong>Decision Reason:</strong> {calculations.get('step_6_final_decision', {}).get('decision_reason', 'N/A')}</p>
+                            <p>• <strong>Calculation:</strong> {calculations.get('step_6_final_decision', {}).get('calculation_breakdown', 'N/A')}</p>
+                        </div>
+                        
+                        <h4>Complete Calculation Object:</h4>
                         <pre style="background: #e9ecef; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.9em;">
 {json.dumps(calculations, indent=2)}
                         </pre>
@@ -2195,6 +2310,24 @@ def get_advanced_rec_class(action: str) -> str:
         return 'rec-buy'
     else:
         return 'rec-no-buy'
+
+def get_best_sales_display(sales_volume: dict) -> tuple:
+    """Get the best sales volume display - show first non-zero period"""
+    periods = [
+        ('sales_per_week', 'Sales Last Week'),
+        ('sales_per_month', 'Sales Last Month'), 
+        ('sales_per_3months', 'Sales Last 3 Months'),
+        ('sales_per_6months', 'Sales Last 6 Months'),
+        ('sales_per_year', 'Sales Last Year')
+    ]
+    
+    for key, label in periods:
+        value = sales_volume.get(key, 0)
+        if value > 0:
+            return key, label, value
+    
+    # If all are 0, return the first one
+    return periods[0][0], periods[0][1], sales_volume.get(periods[0][0], 0)
 
 def build_calculation_step_html(step_title: str, step_data: dict) -> str:
     """Build HTML for a calculation step"""
