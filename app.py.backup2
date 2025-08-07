@@ -700,8 +700,8 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     
     <!-- Favicon Configuration -->
-    <link rel="icon" type="image/png" href="/static/greengoatlogoiphone.png">
-    <link rel="apple-touch-icon" href="/static/greengoatlogoiphone.png">
+    <link rel="icon" type="image/png" href="/static/goaticonforphone.png">
+    <link rel="apple-touch-icon" href="/static/goaticonforphone.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="StockX Tools">
@@ -4038,31 +4038,258 @@ def handle_request_output(data):
 
 @app.route('/favicon.ico')
 def favicon():
-    return send_from_directory('static', 'greengoatlogoiphone.png', mimetype='image/png')
+    return send_from_directory('static', 'goaticonforphone.png', mimetype='image/png')
 
-@app.route('/static/greengoatlogoiphone.png')
+@app.route('/static/goaticonforphone.png')
 def goat_icon():
-    return send_from_directory('static', 'greengoatlogoiphone.png', mimetype='image/png')
+    return send_from_directory('static', 'goaticonforphone.png', mimetype='image/png')
 
-if __name__ == "__main__":
+@app.route('/auth/callback')
+def auth_callback():
+    """Enhanced OAuth callback handler with better error handling"""
+    global auth_state
+    
+    # Get parameters from the callback
+    auth_code = request.args.get('code')
+    error = request.args.get('error')
+    error_description = request.args.get('error_description', '')
+    
+    print(f"🔔 OAuth callback received - Code: {'✅' if auth_code else '❌'}, Error: {'✅' if error else '❌'}")
+    
+    # Handle OAuth errors
+    if error:
+        auth_state['auth_error'] = f"{error}: {error_description}"
+        auth_state['auth_in_progress'] = False
+        
+        print(f"❌ OAuth error: {error}")
+        print(f"   Description: {error_description}")
+        
+        # Provide specific guidance based on error type
+        if 'callback' in error_description.lower() or 'mismatch' in error_description.lower():
+            current_url = get_replit_url()
+            callback_url = f"{current_url}/auth/callback"
+            
+            return render_template_string("""
+            <html>
+            <head><title>🚨 OAuth Callback URL Mismatch</title></head>
+            <body style="font-family: Arial; padding: 30px; max-width: 800px; margin: 0 auto;">
+                <h1 style="color: red;">🚨 OAuth Callback URL Mismatch</h1>
+                <p><strong>Problem:</strong> {{ error_description }}</p>
+                
+                <h2>📋 How to Fix This:</h2>
+                <ol>
+                    <li><strong>Current detected URL:</strong> <code>{{ callback_url }}</code></li>
+                    <li><strong>If this URL is wrong:</strong>
+                        <ul>
+                            <li>Set the environment variable: <code>STOCKX_CALLBACK_URL=https://your-actual-app-url.replit.app</code></li>
+                            <li>Or update your Replit secrets with the correct URL</li>
+                        </ul>
+                    </li>
+                    <li><strong>If the URL is correct:</strong>
+                        <ul>
+                            <li>The StockX OAuth app settings need to be updated</li>
+                            <li>Add <code>{{ callback_url }}</code> to the allowed callback URLs</li>
+                        </ul>
+                    </li>
+                </ol>
+                
+                <h2>🔧 Quick Actions:</h2>
+                <p><a href="/auth/reset" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Reset Authentication</a></p>
+                <p><a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Return to Main Page</a></p>
+                
+                <h2>🐛 Debug Information:</h2>
+                <pre style="background: #f8f9fa; padding: 15px; border: 1px solid #dee2e6; border-radius: 5px;">
+Detected URL: {{ current_url }}
+Callback URL: {{ callback_url }}
+Error: {{ error }}
+Description: {{ error_description }}
+Manual Override: {{ manual_override }}
+Environment Variables:
+{% for key, value in env_vars %}
+  {{ key }}: {{ value }}
+{% endfor %}
+                </pre>
+            </body>
+            </html>
+            """, 
+            error=error,
+            error_description=error_description, 
+            callback_url=callback_url,
+            current_url=current_url,
+            manual_override=MANUAL_CALLBACK_URL or 'Not set',
+            env_vars=[(k, v) for k, v in os.environ.items() if 'REPL' in k.upper()]
+            )
+        
+        else:
+            # Generic error handling
+            return render_template_string("""
+            <html>
+            <head><title>❌ Authentication Error</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: red;">❌ Authentication Error</h1>
+                <p><strong>Error:</strong> {{ error }}</p>
+                <p><strong>Description:</strong> {{ error_description }}</p>
+                
+                <h2>🔧 What to Try:</h2>
+                <ul style="text-align: left; display: inline-block;">
+                    <li>Click "Reset Authentication" below and try again</li>
+                    <li>Check your internet connection</li>
+                    <li>Try again in a few minutes</li>
+                </ul>
+                
+                <p><a href="/auth/reset" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Reset Authentication</a></p>
+                <p><a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Return to Main Page</a></p>
+            </body>
+            </html>
+            """, error=error, error_description=error_description)
+    
+    # Handle successful authorization code
+    if auth_code:
+        print(f"✅ Authorization code received: {auth_code[:20]}...")
+        
+        # Attempt to exchange code for tokens
+        try:
+            if exchange_code_for_tokens(auth_code):
+                auth_state['authenticated'] = True
+                auth_state['auth_in_progress'] = False
+                auth_state['auth_code'] = auth_code
+                auth_state['auth_error'] = None
+                
+                print("✅ Token exchange successful!")
+                
+                # Start the token refresh daemon
+                try:
+                    start_enhanced_token_refresh_thread()
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not start token refresh thread: {e}")
+                
+                return render_template_string("""
+                <html>
+                <head><title>✅ Authentication Successful</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px; background: #d4edda;">
+                    <h1 style="color: green;">✅ Authentication Successful!</h1>
+                    <p style="font-size: 18px;">🎉 StockX API is now ready to use!</p>
+                    <p>✅ Access token is valid</p>
+                    <p>✅ Automatic refresh is enabled</p>
+                    <p>✅ All systems operational</p>
+                    
+                    <p style="margin-top: 30px;">
+                        <a href="/" style="background: #28a745; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-size: 16px;">
+                            🚀 Start Using the API
+                        </a>
+                    </p>
+                    
+                    <script>
+                        // Auto-redirect after 5 seconds
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 5000);
+                    </script>
+                </body>
+                </html>
+                """)
+            else:
+                # Token exchange failed
+                auth_state['auth_error'] = 'Token exchange failed'
+                auth_state['auth_in_progress'] = False
+                
+                return render_template_string("""
+                <html>
+                <head><title>❌ Token Exchange Failed</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: red;">❌ Token Exchange Failed</h1>
+                    <p>We received the authorization code but couldn't exchange it for tokens.</p>
+                    
+                    <h2>🔧 What to Try:</h2>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>Check your internet connection</li>
+                        <li>Try the authentication process again</li>
+                        <li>Contact support if the problem persists</li>
+                    </ul>
+                    
+                    <p><a href="/auth/reset" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Again</a></p>
+                    <p><a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Return to Main Page</a></p>
+                </body>
+                </html>
+                """)
+                
+        except Exception as e:
+            print(f"❌ Exception during token exchange: {e}")
+            auth_state['auth_error'] = f'Token exchange error: {str(e)}'
+            auth_state['auth_in_progress'] = False
+            
+            return render_template_string("""
+            <html>
+            <head><title>❌ Authentication Error</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: red;">❌ Authentication Error</h1>
+                <p>An error occurred during authentication:</p>
+                <p style="background: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; display: inline-block;">{{ error }}</p>
+                
+                <p><a href="/auth/reset" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Again</a></p>
+                <p><a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Return to Main Page</a></p>
+            </body>
+            </html>
+            """, error=str(e))
+    
+    # No code and no error - something's wrong
+    return render_template_string("""
+    <html>
+    <head><title>⚠️ Invalid Callback</title></head>
+    <body style="font-family: Arial; text-align: center; padding: 50px;">
+        <h1 style="color: orange;">⚠️ Invalid OAuth Callback</h1>
+        <p>The callback didn't contain the expected parameters.</p>
+        <p><a href="/auth/start" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Authentication Again</a></p>
+        <p><a href="/" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Return to Main Page</a></p>
+    </body>
+    </html>
+    """)
+
+if __name__ == '__main__':
     try:
-        port = int(os.getenv("PORT", 5000))
+        # Get port from environment variable (Replit uses PORT=5000)
+        port = int(os.getenv('PORT', 5000))
+        
         print("🌐 Starting StockX Tools Web Interface...")
         print(f"📱 Access at: http://0.0.0.0:{port}")
         print("🔄 Real-time updates via WebSocket")
         print("=" * 50)
+        
+        # Start automatic token refresh thread
         try:
             start_enhanced_token_refresh_thread()
         except Exception as e:
             print(f"⚠️ Warning: Could not start token refresh thread: {e}")
-        port = int(os.getenv("PORT", 5000))
-        socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True, use_reloader=False, log_output=True)
+        
+        # Use SocketIO instead of regular Flask with production fixes
+        # Get port from environment variable (Replit uses PORT=5000)
+        port = int(os.getenv('PORT', 5000))
+        
+        socketio.run(
+            app, 
+            host='0.0.0.0', 
+            port=port, 
+            debug=False,
+            allow_unsafe_werkzeug=True,  # Fix for production deployment
+            use_reloader=False,          # Prevent reloader issues in production
+            log_output=True              # Enable logging for debugging
+        )
     except Exception as e:
         print(f"❌ Failed to start server: {e}")
+        print("🔄 Attempting fallback server configuration...")
         try:
-            port = int(os.getenv("PORT", 5000))
-            socketio.run(app, host="0.0.0.0", port=port, debug=False, use_reloader=False)
+            # Fallback configuration without unsafe_werkzeug
+            port = int(os.getenv('PORT', 5000))
+            socketio.run(
+                app, 
+                host='0.0.0.0', 
+                port=port, 
+                debug=False,
+                use_reloader=False
+            )
         except Exception as fallback_error:
             print(f"❌ Fallback also failed: {fallback_error}")
+            print("💡 Try running with: python app.py --production")
             import sys
             sys.exit(1)
+# Test comment
