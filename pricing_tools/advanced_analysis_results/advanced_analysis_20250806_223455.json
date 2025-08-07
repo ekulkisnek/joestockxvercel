@@ -1,0 +1,37 @@
+{
+  "query": "123456789",
+  "size": "10",
+  "timestamp": "2025-08-06T22:34:54.321916",
+  "processing_time": 0.89,
+  "success": false,
+  "errors": [
+    "'NoneType' object has no attribute 'get'"
+  ],
+  "warnings": [],
+  "calculations": {},
+  "final_recommendation": {},
+  "raw_data": {
+    "stockx": {
+      "error": "No StockX match found",
+      "search_query": "123456789",
+      "search_size": "10"
+    },
+    "alias": {
+      "pricing": {},
+      "sales_volume": {
+        "sales_per_week": 0,
+        "error": "No catalog match"
+      },
+      "catalog_match": null,
+      "search_query": "123456789",
+      "search_size": "10",
+      "success": true
+    }
+  },
+  "alternatives": {
+    "stockx_alternatives": [],
+    "alias_alternatives": [],
+    "search_query": "123456789",
+    "size": "10"
+  }
+}

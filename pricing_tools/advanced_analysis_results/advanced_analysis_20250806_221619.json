@@ -1,0 +1,291 @@
+{
+  "query": "DD1391 100",
+  "size": "10",
+  "timestamp": "2025-08-06T22:16:16.279944",
+  "processing_time": 3.13,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "calculations": {
+    "step_1_stockx_analysis": {
+      "stockx_bid": 46.0,
+      "stockx_ask": 54.0,
+      "bid_ask_spread": 8.0,
+      "stockx_product_name": "Nike Dunk Low Retro White Black Panda",
+      "stockx_sku": "DD1391-100",
+      "stockx_url": "https://stockx.com/nike-dunk-low-retro-white-black-2021",
+      "search_query": "DD1391 100",
+      "search_size": "10",
+      "notes": "Retrieved current StockX bid and ask prices"
+    },
+    "step_2_volume_check": {
+      "weekly_sales": 58.33,
+      "is_high_volume": true,
+      "threshold": 3,
+      "notes": "High volume = 3+ sales per week. Current: 58.33 sales/week"
+    },
+    "step_3_ask_calculation": {
+      "original_ask": 54.0,
+      "ask_minus_20_percent": 43.2,
+      "calculation": "54.0 \u00d7 0.8 = 43.2",
+      "rounded_to_tens": 40,
+      "notes": "High volume: Use 20% less than ask, rounded to nearest $10"
+    },
+    "step_4_bid_analysis": {
+      "stockx_bid": "$46",
+      "notes": "Current StockX bid price"
+    },
+    "step_5_alias_comparison": {
+      "goat_ship_to_verify": 57.0,
+      "goat_consignment": 57.0,
+      "goat_ask_used": 57.0,
+      "alias_product_name": "Dunk Low 'Black White'",
+      "alias_sku": "DD1391 100",
+      "alias_catalog_id": "dunk-low-black-white-dd1391-100",
+      "search_query": "DD1391 100",
+      "search_size": "10",
+      "notes": "Use lower of ship-to-verify or consignment price from GOAT/Alias"
+    },
+    "step_6_final_decision": {
+      "final_price": 40,
+      "decision_reason": "High volume (58.33 sales/week): Use 20% less than ask",
+      "recommendation": "\u2705 BUY AT $40: High volume (58.33 sales/week): Use 20% less than ask"
+    }
+  },
+  "final_recommendation": {
+    "action": "BUY",
+    "price": 40,
+    "reason": "High volume (58.33 sales/week): Use 20% less than ask",
+    "recommendation": "\u2705 BUY AT $40: High volume (58.33 sales/week): Use 20% less than ask",
+    "confidence": "HIGH"
+  },
+  "raw_data": {
+    "stockx": {
+      "bid": "$46",
+      "ask": "$54",
+      "product_name": "Nike Dunk Low Retro White Black Panda",
+      "sku": "DD1391-100",
+      "url": "https://stockx.com/nike-dunk-low-retro-white-black-2021",
+      "search_query": "DD1391 100",
+      "search_size": "10",
+      "success": true
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 57.0,
+        "consignment_price": 57.0,
+        "lowest_with_you": 57.0,
+        "lowest_consigned": 57.0,
+        "last_with_you_price": 60.0,
+        "last_with_you_date": "2025-08-07T01:35:56.929Z",
+        "last_consigned_price": 60.0,
+        "last_consigned_date": "2025-08-06T23:06:06.074Z",
+        "alias_sku": "DD1391 100"
+      },
+      "sales_volume": {
+        "sales_per_week": 58.33,
+        "total_sales": 200,
+        "period_days": 24,
+        "earliest_sale": "2025-07-14T00:10:05.993000+00:00",
+        "latest_sale": "2025-08-07T01:35:56.929000+00:00"
+      },
+      "catalog_match": {
+        "catalog_id": "dunk-low-black-white-dd1391-100",
+        "name": "Dunk Low 'Black White'",
+        "sku": "DD1391 100",
+        "brand": "Nike",
+        "gender": "men",
+        "release_date": "2021-03-10T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "4",
+            "value": 4,
+            "us_size_equivalent": 4
+          },
+          {
+            "display_name": "4.5",
+            "value": 4.5,
+            "us_size_equivalent": 4.5
+          },
+          {
+            "display_name": "5",
+            "value": 5,
+            "us_size_equivalent": 5
+          },
+          {
+            "display_name": "5.5",
+            "value": 5.5,
+            "us_size_equivalent": 5.5
+          },
+          {
+            "display_name": "6",
+            "value": 6,
+            "us_size_equivalent": 6
+          },
+          {
+            "display_name": "6.5",
+            "value": 6.5,
+            "us_size_equivalent": 6.5
+          },
+          {
+            "display_name": "7",
+            "value": 7,
+            "us_size_equivalent": 7
+          },
+          {
+            "display_name": "7.5",
+            "value": 7.5,
+            "us_size_equivalent": 7.5
+          },
+          {
+            "display_name": "8",
+            "value": 8,
+            "us_size_equivalent": 8
+          },
+          {
+            "display_name": "8.5",
+            "value": 8.5,
+            "us_size_equivalent": 8.5
+          },
+          {
+            "display_name": "9",
+            "value": 9,
+            "us_size_equivalent": 9
+          },
+          {
+            "display_name": "9.5",
+            "value": 9.5,
+            "us_size_equivalent": 9.5
+          },
+          {
+            "display_name": "10",
+            "value": 10,
+            "us_size_equivalent": 10
+          },
+          {
+            "display_name": "10.5",
+            "value": 10.5,
+            "us_size_equivalent": 10.5
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "11.5",
+            "value": 11.5,
+            "us_size_equivalent": 11.5
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "12.5",
+            "value": 12.5,
+            "us_size_equivalent": 12.5
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "13.5",
+            "value": 13.5,
+            "us_size_equivalent": 13.5
+          },
+          {
+            "display_name": "14",
+            "value": 14,
+            "us_size_equivalent": 14
+          },
+          {
+            "display_name": "14.5",
+            "value": 14.5,
+            "us_size_equivalent": 14.5
+          },
+          {
+            "display_name": "15",
+            "value": 15,
+            "us_size_equivalent": 15
+          },
+          {
+            "display_name": "16",
+            "value": 16,
+            "us_size_equivalent": 16
+          },
+          {
+            "display_name": "17",
+            "value": 17,
+            "us_size_equivalent": 17
+          },
+          {
+            "display_name": "18",
+            "value": 18,
+            "us_size_equivalent": 18
+          },
+          {
+            "display_name": "19",
+            "value": 19,
+            "us_size_equivalent": 19
+          },
+          {
+            "display_name": "20",
+            "value": 20,
+            "us_size_equivalent": 20
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "200000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/071/445/308/original/719082_00.png.png",
+        "retail_price_cents": "10000",
+        "colorway": "White/Black/White",
+        "nickname": "Black White",
+        "requires_listing_pictures": false,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      },
+      "search_query": "DD1391 100",
+      "search_size": "10",
+      "success": true
+    }
+  }
+}

@@ -1,0 +1,222 @@
+{
+  "query": "Yeezy",
+  "size": "10",
+  "timestamp": "2025-08-06T22:31:02.263646",
+  "processing_time": 3.15,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "calculations": {
+    "step_1_stockx_analysis": {
+      "stockx_bid": 102.0,
+      "stockx_ask": 139.0,
+      "bid_ask_spread": 37.0,
+      "stockx_product_name": "adidas Yeezy Slide Slate Marine",
+      "stockx_sku": "ID2349",
+      "stockx_url": "https://stockx.com/adidas-yeezy-slide-slate-marine",
+      "search_query": "Yeezy",
+      "search_size": "10",
+      "notes": "Retrieved current StockX bid and ask prices"
+    },
+    "step_2_volume_check": {
+      "weekly_sales": 48.28,
+      "is_high_volume": true,
+      "threshold": 3,
+      "notes": "High volume = 3+ sales per week. Current: 48.28 sales/week"
+    },
+    "step_3_ask_calculation": {
+      "original_ask": 139.0,
+      "ask_minus_20_percent": 111.2,
+      "calculation": "139.0 \u00d7 0.8 = 111.2",
+      "rounded_to_tens": 110,
+      "notes": "High volume: Use 20% less than ask, rounded to nearest $10"
+    },
+    "step_4_bid_analysis": {
+      "stockx_bid": "$102",
+      "notes": "Current StockX bid price"
+    },
+    "step_5_alias_comparison": {
+      "goat_ship_to_verify": 152.0,
+      "goat_consignment": 178.0,
+      "goat_ask_used": 152.0,
+      "alias_product_name": "Yeezy Slides 'Onyx'",
+      "alias_sku": "HQ6448",
+      "alias_catalog_id": "yeezy-slides-onyx-hq6448",
+      "search_query": "Yeezy",
+      "search_size": "10",
+      "notes": "Use lower of ship-to-verify or consignment price from GOAT/Alias"
+    },
+    "step_6_final_decision": {
+      "final_price": 110,
+      "decision_reason": "High volume (48.28 sales/week): Use 20% less than ask",
+      "recommendation": "\u2705 BUY AT $110: High volume (48.28 sales/week): Use 20% less than ask"
+    }
+  },
+  "final_recommendation": {
+    "action": "BUY",
+    "price": 110,
+    "reason": "High volume (48.28 sales/week): Use 20% less than ask",
+    "recommendation": "\u2705 BUY AT $110: High volume (48.28 sales/week): Use 20% less than ask",
+    "confidence": "HIGH"
+  },
+  "raw_data": {
+    "stockx": {
+      "bid": "$102",
+      "ask": "$139",
+      "product_name": "adidas Yeezy Slide Slate Marine",
+      "sku": "ID2349",
+      "url": "https://stockx.com/adidas-yeezy-slide-slate-marine",
+      "search_query": "Yeezy",
+      "search_size": "10",
+      "success": true
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 152.0,
+        "consignment_price": 178.0,
+        "lowest_with_you": 152.0,
+        "lowest_consigned": 178.0,
+        "last_with_you_price": 253.0,
+        "last_with_you_date": "2025-08-06T23:04:37.892Z",
+        "last_consigned_price": 253.0,
+        "last_consigned_date": "2025-08-06T23:04:37.892Z",
+        "alias_sku": "HQ6448"
+      },
+      "sales_volume": {
+        "sales_per_week": 48.28,
+        "total_sales": 200,
+        "period_days": 29,
+        "earliest_sale": "2025-07-08T21:23:28.026000+00:00",
+        "latest_sale": "2025-08-06T23:04:37.892000+00:00"
+      },
+      "catalog_match": {
+        "catalog_id": "yeezy-slides-onyx-hq6448",
+        "name": "Yeezy Slides 'Onyx'",
+        "sku": "HQ6448",
+        "brand": "adidas",
+        "gender": "men",
+        "release_date": "2022-03-07T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "4",
+            "value": 4,
+            "us_size_equivalent": 4
+          },
+          {
+            "display_name": "5",
+            "value": 5,
+            "us_size_equivalent": 5
+          },
+          {
+            "display_name": "6",
+            "value": 6,
+            "us_size_equivalent": 6
+          },
+          {
+            "display_name": "7",
+            "value": 7,
+            "us_size_equivalent": 7
+          },
+          {
+            "display_name": "8",
+            "value": 8,
+            "us_size_equivalent": 8
+          },
+          {
+            "display_name": "9",
+            "value": 9,
+            "us_size_equivalent": 9
+          },
+          {
+            "display_name": "10",
+            "value": 10,
+            "us_size_equivalent": 10
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "14",
+            "value": 14,
+            "us_size_equivalent": 14
+          },
+          {
+            "display_name": "15",
+            "value": 15,
+            "us_size_equivalent": 15
+          },
+          {
+            "display_name": "16",
+            "value": 16,
+            "us_size_equivalent": 16
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "200000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/072/273/668/original/884794_00.png.png",
+        "retail_price_cents": "6000",
+        "colorway": "Onyx/Onyx/Onyx",
+        "nickname": "Onyx",
+        "requires_listing_pictures": false,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      },
+      "search_query": "Yeezy",
+      "search_size": "10",
+      "success": true
+    }
+  },
+  "alternatives": {
+    "stockx_alternatives": [],
+    "alias_alternatives": [],
+    "search_query": "Yeezy",
+    "size": "10"
+  }
+}

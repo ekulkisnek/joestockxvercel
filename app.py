@@ -20,6 +20,7 @@ from datetime import datetime
 import signal
 import psutil
 import time
+from typing import List, Dict, Optional
 
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
@@ -886,6 +887,25 @@ HTML_TEMPLATE = """
     </div>
     
     <div class="search-section">
+        <h2>🎯 Advanced Shoe Analysis</h2>
+        <p>Get detailed pricing analysis with your specific logic and all calculations shown</p>
+        <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
+            <label for="advanced_shoe_query">Enter shoe name or SKU:</label><br>
+            <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
+            <label for="shoe_size">Size:</label><br>
+            <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
+            <input type="submit" value="🎯 Analyze with Pricing Logic" class="search-button" style="background: #dc3545; color: white; padding: 10px 20px; font-weight: bold;">
+        </form>
+        <p><small><strong>Features:</strong> StockX + GOAT data, sales volume analysis, detailed calculations, automatic result saving</small></p>
+        
+        <div style="margin: 15px 0;">
+            <a href="/advanced_results" style="background: #17a2b8; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;">
+                📋 View All Saved Results
+            </a>
+        </div>
+    </div>
+    
+    <div class="search-section">
         <h2>🔍 Product Search</h2>
         <p>Search for any shoe and get complete StockX information</p>
         <form action="/search" method="post" style="margin: 10px 0;">
@@ -1664,8 +1684,128 @@ def find_skus():
         flash(f'SKU Finder error: {str(e)}')
         return redirect(url_for('index'))
 
-def render_single_shoe_analysis(result: dict) -> str:
-    """Render comprehensive single shoe analysis results"""
+@app.route('/advanced_analysis', methods=['POST'])
+def advanced_analysis():
+    """Handle advanced shoe analysis with pricing logic - REQUIRES AUTHENTICATION"""
+    shoe_query = request.form.get('shoe_query', '').strip()
+    size = request.form.get('size', '10').strip()
+    
+    if not shoe_query:
+        flash('Please enter a shoe name or SKU')
+        return redirect(url_for('index'))
+    
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, recovery_action = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ ANALYSIS BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+    
+    try:
+        # Import and run advanced shoe analyzer
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        
+        analyzer = AdvancedShoeAnalyzer()
+        result = analyzer.analyze_shoe_with_pricing_logic(shoe_query, size)
+        
+        # Generate comprehensive HTML response
+        return render_advanced_analysis(result)
+        
+    except Exception as e:
+        flash(f'Advanced analysis error: {str(e)}')
+        return redirect(url_for('index'))
+
+@app.route('/advanced_results')
+def advanced_results():
+    """Display all saved advanced analysis results"""
+    try:
+        # Import analyzer to get results
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        
+        analyzer = AdvancedShoeAnalyzer()
+        results = analyzer.get_all_results()
+        
+        return render_advanced_results_list(results)
+        
+    except Exception as e:
+        flash(f'Error loading results: {str(e)}')
+        return redirect(url_for('index'))
+
+@app.route('/advanced_result/<timestamp>')
+def view_advanced_result(timestamp):
+    """View a specific advanced analysis result"""
+    try:
+        # Import analyzer to get specific result
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        
+        analyzer = AdvancedShoeAnalyzer()
+        results = analyzer.get_all_results()
+        
+        # Find the specific result
+        target_result = None
+        for result in results:
+            if result.get('timestamp', '').replace(':', '').replace('-', '').replace('T', '').replace('.', '') == timestamp:
+                target_result = result
+                break
+        
+        if target_result:
+            return render_advanced_analysis(target_result)
+        else:
+            flash('Result not found')
+            return redirect(url_for('advanced_results'))
+        
+    except Exception as e:
+        flash(f'Error loading result: {str(e)}')
+        return redirect(url_for('advanced_results'))
+
+@app.route('/delete_advanced_result/<timestamp>', methods=['POST'])
+def delete_advanced_result(timestamp):
+    """Delete a specific advanced analysis result"""
+    try:
+        # Import analyzer to delete result
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        
+        analyzer = AdvancedShoeAnalyzer()
+        success = analyzer.delete_result(timestamp)
+        
+        if success:
+            flash('Result deleted successfully')
+        else:
+            flash('Failed to delete result')
+        
+        return redirect(url_for('advanced_results'))
+        
+    except Exception as e:
+        flash(f'Error deleting result: {str(e)}')
+        return redirect(url_for('advanced_results'))
+
+@app.route('/generate_alternatives/<timestamp>', methods=['POST'])
+def generate_alternatives(timestamp):
+    """Generate alternatives for a specific result"""
+    try:
+        # Import analyzer to generate alternatives
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        
+        analyzer = AdvancedShoeAnalyzer()
+        alternatives = analyzer.generate_alternatives_for_result(timestamp)
+        
+        if 'error' in alternatives:
+            flash(f'Error generating alternatives: {alternatives["error"]}')
+        else:
+            flash('Alternatives generated successfully')
+        
+        return redirect(url_for('view_advanced_result', timestamp=timestamp))
+        
+    except Exception as e:
+        flash(f'Error generating alternatives: {str(e)}')
+        return redirect(url_for('advanced_results'))
+
+def render_advanced_analysis(result: dict) -> str:
+    """Render comprehensive advanced shoe analysis results with detailed calculations"""
     
     if not result.get('success'):
         error_msg = ', '.join(result.get('errors', ['Unknown error']))
@@ -1673,16 +1813,17 @@ def render_single_shoe_analysis(result: dict) -> str:
         <!DOCTYPE html>
         <html>
         <head>
-            <title>❌ Analysis Failed</title>
+            <title>❌ Advanced Analysis Failed</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; }}
                 .error {{ color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 5px; }}
             </style>
         </head>
         <body>
-            <h1>❌ Shoe Analysis Failed</h1>
+            <h1>❌ Advanced Analysis Failed</h1>
             <div class="error">
                 <strong>Query:</strong> {result.get('query', 'Unknown')}<br>
+                <strong>Size:</strong> {result.get('size', 'Unknown')}<br>
                 <strong>Error:</strong> {error_msg}
             </div>
             <p><a href="/">← Back to Main Page</a></p>
@@ -1692,6 +1833,526 @@ def render_single_shoe_analysis(result: dict) -> str:
     
     # Extract data for rendering
     query = result.get('query', 'Unknown Shoe')
+    size = result.get('size', 'Unknown')
+    calculations = result.get('calculations', {})
+    recommendation = result.get('final_recommendation', {})
+    raw_data = result.get('raw_data', {})
+    
+    # Build comprehensive HTML response with detailed calculations
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🎯 Advanced Analysis: {query}</title>
+        <style>
+            body {{ 
+                font-family: 'Segoe UI', Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px;
+                line-height: 1.6;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }}
+            .container {{ 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                overflow: hidden;
+            }}
+            .header {{ 
+                background: linear-gradient(135deg, #2c3e50, #34495e);
+                color: white; 
+                padding: 30px; 
+                text-align: center;
+            }}
+            .header h1 {{ margin: 0; font-size: 2.5em; }}
+            .header h2 {{ margin: 10px 0 0 0; font-weight: 300; opacity: 0.9; }}
+            
+            .content {{ padding: 20px; }}
+            
+            .recommendation-section {{ 
+                background: linear-gradient(135deg, #27ae60, #2ecc71);
+                color: white;
+                padding: 25px;
+                margin: 20px 0;
+                border-radius: 12px;
+                text-align: center;
+            }}
+            
+            .recommendation {{ 
+                font-size: 2em; 
+                font-weight: bold; 
+                padding: 20px; 
+                border-radius: 10px;
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .rec-buy {{ background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; }}
+            .rec-no-buy {{ background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }}
+            
+            .calculation-step {{ 
+                margin: 30px 0; 
+                padding: 25px; 
+                background: #f8f9fa;
+                border-radius: 12px;
+                border-left: 5px solid #3498db;
+            }}
+            .calculation-step h3 {{ 
+                margin-top: 0; 
+                color: #2c3e50;
+                font-size: 1.3em;
+            }}
+            
+            .calculation-detail {{ 
+                background: white; 
+                padding: 15px; 
+                border-radius: 8px; 
+                margin: 10px 0;
+                border: 1px solid #ddd;
+            }}
+            
+            .metric {{ 
+                display: inline-block;
+                background: #e7f3ff; 
+                padding: 10px 15px; 
+                border-radius: 8px;
+                margin: 5px;
+                font-weight: bold;
+            }}
+            
+            .back-link {{ 
+                position: fixed; 
+                top: 30px; 
+                right: 30px; 
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white; 
+                padding: 12px 20px; 
+                text-decoration: none; 
+                border-radius: 25px;
+                box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+                font-weight: bold;
+                transition: transform 0.2s;
+                z-index: 1000;
+            }}
+            .back-link:hover {{ 
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+            }}
+            
+            .confidence-high {{ border-left-color: #27ae60; }}
+            .confidence-medium {{ border-left-color: #f39c12; }}
+            .confidence-low {{ border-left-color: #e74c3c; }}
+            
+            .math-formula {{ 
+                background: #f8f9fa;
+                border: 2px solid #3498db;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 10px 0;
+                font-family: monospace;
+                font-size: 1.1em;
+            }}
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="container">
+            <div class="header">
+                <h1>🎯 Advanced Shoe Analysis</h1>
+                <h2>{query} - Size {size}</h2>
+                <p>Analysis completed at {datetime.fromisoformat(result.get('timestamp', '')).strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </div>
+            
+            <div class="content">
+                <!-- Final Recommendation -->
+                <div class="recommendation-section">
+                    <h2>🎯 FINAL RECOMMENDATION</h2>
+                    <div class="recommendation {get_advanced_rec_class(recommendation.get('action', ''))}">
+                        {recommendation.get('recommendation', 'No recommendation available')}
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <div class="metric">Confidence: {recommendation.get('confidence', 'Unknown')}</div>
+                        <div class="metric">Processing Time: {result.get('processing_time', 0)}s</div>
+                    </div>
+                </div>
+                
+                <!-- Verification Information -->
+                <div class="calculation-step">
+                    <h3>🔍 Verification Information</h3>
+                    <div class="calculation-detail">
+                        <h4>StockX Match:</h4>
+                        <p><strong>Product:</strong> {calculations.get('step_1_stockx_analysis', {}).get('stockx_product_name', 'N/A')}</p>
+                        <p><strong>SKU:</strong> {calculations.get('step_1_stockx_analysis', {}).get('stockx_sku', 'N/A')}</p>
+                        <p><strong>URL:</strong> <a href="{calculations.get('step_1_stockx_analysis', {}).get('stockx_url', '#')}" target="_blank">View on StockX</a></p>
+                    </div>
+                    <div class="calculation-detail">
+                        <h4>Alias/GOAT Match:</h4>
+                        <p><strong>Product:</strong> {calculations.get('step_5_alias_comparison', {}).get('alias_product_name', 'N/A')}</p>
+                        <p><strong>SKU:</strong> {calculations.get('step_5_alias_comparison', {}).get('alias_sku', 'N/A')}</p>
+                        <p><strong>Catalog ID:</strong> {calculations.get('step_5_alias_comparison', {}).get('alias_catalog_id', 'N/A')}</p>
+                    </div>
+                </div>
+                
+                <!-- Correction Options -->
+                {build_correction_section(result.get('alternatives', {}), result.get('timestamp', '').split('T')[0].replace('-', ''))}
+                
+                <!-- Step 1: StockX Analysis -->
+                {build_calculation_step_html('Step 1: StockX Analysis', calculations.get('step_1_stockx_analysis', {}))}
+                
+                <!-- Step 2: Volume Check -->
+                {build_calculation_step_html('Step 2: Volume Check', calculations.get('step_2_volume_check', {}))}
+                
+                <!-- Step 3: Ask Calculation -->
+                {build_calculation_step_html('Step 3: Ask Calculation (High Volume)', calculations.get('step_3_ask_calculation', {}))}
+                
+                <!-- Step 4: Bid Analysis -->
+                {build_calculation_step_html('Step 4: Bid Analysis', calculations.get('step_4_bid_analysis', {}))}
+                
+                <!-- Step 5: Alias/GOAT Comparison -->
+                {build_calculation_step_html('Step 5: Alias/GOAT Comparison', calculations.get('step_5_alias_comparison', {}))}
+                
+                <!-- Step 6: Final Decision -->
+                {build_calculation_step_html('Step 6: Final Decision Logic', calculations.get('step_6_final_decision', {}))}
+                
+                <!-- Raw Data Section -->
+                <div class="calculation-step">
+                    <h3>📊 Raw Data</h3>
+                    <div class="calculation-detail">
+                        <h4>StockX Data:</h4>
+                        <pre>{json.dumps(raw_data.get('stockx', {}), indent=2)}</pre>
+                    </div>
+                    <div class="calculation-detail">
+                        <h4>Alias/GOAT Data:</h4>
+                        <pre>{json.dumps(raw_data.get('alias', {}), indent=2)}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def get_advanced_rec_class(action: str) -> str:
+    """Get CSS class for advanced recommendation styling"""
+    if action == 'BUY':
+        return 'rec-buy'
+    else:
+        return 'rec-no-buy'
+
+def build_calculation_step_html(step_title: str, step_data: dict) -> str:
+    """Build HTML for a calculation step"""
+    if not step_data:
+        return ""
+    
+    # Determine confidence class
+    confidence_class = 'confidence-high'  # Default
+    
+    html = f"""
+    <div class="calculation-step {confidence_class}">
+        <h3>{step_title}</h3>
+        <div class="calculation-detail">
+    """
+    
+    # Add each data point
+    for key, value in step_data.items():
+        if key == 'notes':
+            html += f"<p><strong>Notes:</strong> {value}</p>"
+        elif key == 'calculation':
+            html += f'<div class="math-formula">{value}</div>'
+        elif isinstance(value, (int, float)):
+            html += f"<div class='metric'>{key.replace('_', ' ').title()}: {value}</div>"
+        elif isinstance(value, bool):
+            html += f"<div class='metric'>{key.replace('_', ' ').title()}: {'✅ Yes' if value else '❌ No'}</div>"
+        elif value is not None:
+            html += f"<div class='metric'>{key.replace('_', ' ').title()}: {value}</div>"
+    
+    html += "</div></div>"
+    return html
+
+def build_correction_section(alternatives: dict, timestamp: str = "") -> str:
+    """Build HTML for correction options section"""
+    # Check if alternatives exist and have content
+    has_alternatives = (alternatives and 
+                       (alternatives.get('stockx_alternatives') or alternatives.get('alias_alternatives')))
+    
+    if not has_alternatives:
+        # Show button to generate alternatives
+        return f"""
+        <div class="calculation-step">
+            <h3>🔧 Correction Options</h3>
+            <p><em>If the matches above are incorrect, you can generate alternative matches:</em></p>
+            
+            <div style="margin: 20px 0;">
+                <form method="POST" action="/generate_alternatives/{timestamp}" style="display: inline;">
+                    <button type="submit" class="correction-btn" style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        Generate Alternative Matches
+                    </button>
+                </form>
+                <p style="color: #666; font-size: 0.9em; margin-top: 10px;">
+                    <em>This will search for other possible matches and may take a few seconds.</em>
+                </p>
+            </div>
+        </div>
+        """
+    
+    html = """
+    <div class="calculation-step">
+        <h3>🔧 Correction Options</h3>
+        <p><em>If the matches above are incorrect, you can select alternatives:</em></p>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="toggleCorrections()" class="correction-btn" style="background: #ffc107; color: #212529; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                Show Alternative Matches
+            </button>
+            <div id="correctionOptions" style="display: none; margin-top: 15px;">
+    """
+    
+    # StockX alternatives
+    if alternatives.get('stockx_alternatives'):
+        html += "<h4>StockX Alternatives:</h4>"
+        for i, alt in enumerate(alternatives['stockx_alternatives']):
+            html += f"""
+            <div class="alternative-option" style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; border-left: 3px solid #007bff;">
+                <input type="radio" name="stockx_alt" id="stockx_{i}" value="{alt['sku']}">
+                <label for="stockx_{i}" style="margin-left: 10px; cursor: pointer;">
+                    <strong>{alt['name']}</strong> (SKU: {alt['sku']})
+                    <br><small style="color: #666;">Variation: {alt.get('variation', 'N/A')}</small>
+                </label>
+            </div>
+            """
+    
+    # Alias alternatives
+    if alternatives.get('alias_alternatives'):
+        html += "<h4>Alias/GOAT Alternatives:</h4>"
+        for i, alt in enumerate(alternatives['alias_alternatives']):
+            html += f"""
+            <div class="alternative-option" style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; border-left: 3px solid #28a745;">
+                <input type="radio" name="alias_alt" id="alias_{i}" value="{alt['catalog_id']}">
+                <label for="alias_{i}" style="margin-left: 10px; cursor: pointer;">
+                    <strong>{alt['name']}</strong> (SKU: {alt['sku']})
+                    <br><small style="color: #666;">Search term: {alt.get('search_term', 'N/A')}</small>
+                </label>
+            </div>
+            """
+    
+    html += """
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function toggleCorrections() {
+            const options = document.getElementById('correctionOptions');
+            const btn = event.target;
+            if (options.style.display === 'none') {
+                options.style.display = 'block';
+                btn.textContent = 'Hide Alternative Matches';
+                btn.style.background = '#6c757d';
+            } else {
+                options.style.display = 'none';
+                btn.textContent = 'Show Alternative Matches';
+                btn.style.background = '#ffc107';
+            }
+        }
+    </script>
+    """
+    
+    return html
+
+def render_advanced_results_list(results: List[dict]) -> str:
+    """Render list of all saved advanced analysis results"""
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>📋 Advanced Analysis Results</title>
+        <style>
+            body {{ 
+                font-family: 'Segoe UI', Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px;
+                line-height: 1.6;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }}
+            .container {{ 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                overflow: hidden;
+            }}
+            .header {{ 
+                background: linear-gradient(135deg, #2c3e50, #34495e);
+                color: white; 
+                padding: 30px; 
+                text-align: center;
+            }}
+            .header h1 {{ margin: 0; font-size: 2.5em; }}
+            
+            .content {{ padding: 20px; }}
+            
+            .result-card {{ 
+                background: #f8f9fa;
+                border-radius: 10px;
+                padding: 20px;
+                margin: 15px 0;
+                border-left: 5px solid #3498db;
+                transition: transform 0.2s;
+            }}
+            .result-card:hover {{ 
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            }}
+            
+            .result-header {{ 
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }}
+            
+            .result-title {{ 
+                font-size: 1.3em;
+                font-weight: bold;
+                color: #2c3e50;
+            }}
+            
+            .result-meta {{ 
+                color: #666;
+                font-size: 0.9em;
+            }}
+            
+            .recommendation-badge {{ 
+                padding: 5px 15px;
+                border-radius: 20px;
+                font-weight: bold;
+                font-size: 0.9em;
+            }}
+            .badge-buy {{ background: #27ae60; color: white; }}
+            .badge-no-buy {{ background: #e74c3c; color: white; }}
+            
+            .action-buttons {{ 
+                margin-top: 15px;
+            }}
+            
+            .btn {{ 
+                padding: 8px 16px;
+                border-radius: 5px;
+                text-decoration: none;
+                margin-right: 10px;
+                font-weight: bold;
+            }}
+            .btn-view {{ background: #3498db; color: white; }}
+            .btn-delete {{ background: #e74c3c; color: white; }}
+            
+            .back-link {{ 
+                position: fixed; 
+                top: 30px; 
+                right: 30px; 
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white; 
+                padding: 12px 20px; 
+                text-decoration: none; 
+                border-radius: 25px;
+                box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+                font-weight: bold;
+                transition: transform 0.2s;
+                z-index: 1000;
+            }}
+            .back-link:hover {{ 
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+            }}
+            
+            .empty-state {{ 
+                text-align: center;
+                padding: 50px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="container">
+            <div class="header">
+                <h1>📋 Advanced Analysis Results</h1>
+                <p>All your saved shoe analyses with detailed pricing logic</p>
+            </div>
+            
+            <div class="content">
+                {build_results_list_html(results)}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def build_results_list_html(results: List[dict]) -> str:
+    """Build HTML for the results list"""
+    if not results:
+        return """
+        <div class="empty-state">
+            <h2>📭 No Results Yet</h2>
+            <p>You haven't run any advanced analyses yet.</p>
+            <p><a href="/" style="background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Run Your First Analysis</a></p>
+        </div>
+        """
+    
+    html = ""
+    for result in results:
+        query = result.get('query', 'Unknown')
+        size = result.get('size', 'Unknown')
+        timestamp = result.get('timestamp', '')
+        recommendation = result.get('final_recommendation', {})
+        action = recommendation.get('action', 'UNKNOWN')
+        price = recommendation.get('price')
+        confidence = recommendation.get('confidence', 'Unknown')
+        
+        # Format timestamp
+        try:
+            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            formatted_time = timestamp
+        
+        # Create timestamp for URL
+        url_timestamp = timestamp.replace(':', '').replace('-', '').replace('T', '').replace('.', '')
+        
+        badge_class = 'badge-buy' if action == 'BUY' else 'badge-no-buy'
+        badge_text = f"BUY ${price}" if action == 'BUY' and price else action
+        
+        html += f"""
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">{query} - Size {size}</div>
+                    <div class="result-meta">
+                        Analyzed: {formatted_time} | Confidence: {confidence}
+                    </div>
+                </div>
+                <div class="recommendation-badge {badge_class}">{badge_text}</div>
+            </div>
+            
+            <div class="action-buttons">
+                <a href="/advanced_result/{url_timestamp}" class="btn btn-view">📊 View Details</a>
+                <form action="/delete_advanced_result/{url_timestamp}" method="post" style="display: inline;">
+                    <button type="submit" class="btn btn-delete" onclick="return confirm('Are you sure you want to delete this result?')">🗑️ Delete</button>
+                </form>
+            </div>
+        </div>
+        """
+    
+    return html
+
+def render_single_shoe_analysis(result: dict) -> str:
     shoe_id = result.get('shoe_identification', {})
     market = result.get('market_summary', {})
     performance = result.get('sales_performance', {})
@@ -2810,7 +3471,7 @@ def handle_request_output(data):
 if __name__ == '__main__':
     try:
         print("🌐 Starting StockX Tools Web Interface...")
-        print("📱 Access at: http://0.0.0.0:5000")
+        print("📱 Access at: http://0.0.0.0:8080")
         print("🔄 Real-time updates via WebSocket")
         print("=" * 50)
         
@@ -2824,7 +3485,7 @@ if __name__ == '__main__':
         socketio.run(
             app, 
             host='0.0.0.0', 
-            port=5000, 
+            port=8080, 
             debug=False,
             allow_unsafe_werkzeug=True,  # Fix for production deployment
             use_reloader=False,          # Prevent reloader issues in production
@@ -2838,7 +3499,7 @@ if __name__ == '__main__':
             socketio.run(
                 app, 
                 host='0.0.0.0', 
-                port=5000, 
+                port=8080, 
                 debug=False,
                 use_reloader=False
             )

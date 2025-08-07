@@ -1,0 +1,193 @@
+{
+  "query": "Nike Dunk Low Panda",
+  "size": "10",
+  "timestamp": "2025-08-06T22:10:05.106441",
+  "processing_time": 3.56,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "calculations": {
+    "step_1_stockx_analysis": {
+      "stockx_bid": 46.0,
+      "stockx_ask": 54.0,
+      "bid_ask_spread": 8.0,
+      "notes": "Retrieved current StockX bid and ask prices"
+    },
+    "step_2_volume_check": {
+      "weekly_sales": 0,
+      "is_high_volume": false,
+      "threshold": 3,
+      "notes": "High volume = 3+ sales per week. Current: 0 sales/week"
+    },
+    "step_3_ask_calculation": {
+      "applies": false,
+      "reason": "Low volume or no ask price available",
+      "notes": "Low volume: Skip ask calculation, go to bid analysis"
+    },
+    "step_4_bid_analysis": {
+      "stockx_bid": "$46",
+      "notes": "Current StockX bid price"
+    },
+    "step_5_alias_comparison": {
+      "goat_ship_to_verify": 57.0,
+      "goat_consignment": 57.0,
+      "goat_ask_used": 57.0,
+      "notes": "Use lower of ship-to-verify or consignment price from GOAT/Alias"
+    },
+    "step_6_final_decision": {
+      "final_price": 46.0,
+      "decision_reason": "Low volume: Bid ($46.0) matches 20% less than GOAT ask ($57.0)",
+      "recommendation": "\u2705 BUY AT $46.0: Low volume: Bid ($46.0) matches 20% less than GOAT ask ($57.0)"
+    }
+  },
+  "final_recommendation": {
+    "action": "BUY",
+    "price": 46.0,
+    "reason": "Low volume: Bid ($46.0) matches 20% less than GOAT ask ($57.0)",
+    "recommendation": "\u2705 BUY AT $46.0: Low volume: Bid ($46.0) matches 20% less than GOAT ask ($57.0)",
+    "confidence": "MEDIUM"
+  },
+  "raw_data": {
+    "stockx": {
+      "bid": "$46",
+      "ask": "$54",
+      "product_name": "Nike Dunk Low Retro White Black Panda",
+      "sku": "DD1391-100",
+      "url": "https://stockx.com/nike-dunk-low-retro-white-black-2021",
+      "success": true
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 57.0,
+        "consignment_price": 57.0,
+        "lowest_with_you": 57.0,
+        "lowest_consigned": 57.0,
+        "last_with_you_price": 60.0,
+        "last_with_you_date": "2025-08-07T01:35:56.929Z",
+        "last_consigned_price": 60.0,
+        "last_consigned_date": "2025-08-06T23:06:06.074Z",
+        "alias_sku": "DD1391 100"
+      },
+      "sales_volume": {
+        "sales_per_week": 0,
+        "total_sales": 0,
+        "period_days": 0
+      },
+      "catalog_match": {
+        "catalog_id": "the-powerpuff-girls-x-dunk-low-pro-sb-qs-ps-bubbles-fz8833-400",
+        "name": "The Powerpuff Girls x Dunk Low Pro SB QS PS 'Bubbles'",
+        "sku": "FZ8833 400",
+        "brand": "Nike",
+        "gender": "youth",
+        "release_date": "2023-12-14T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "10.5",
+            "value": 10.5,
+            "us_size_equivalent": 10.5
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "11.5",
+            "value": 11.5,
+            "us_size_equivalent": 11.5
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "12.5",
+            "value": 12.5,
+            "us_size_equivalent": 12.5
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "13.5",
+            "value": 13.5,
+            "us_size_equivalent": 13.5
+          },
+          {
+            "display_name": "1",
+            "value": 1,
+            "us_size_equivalent": 1
+          },
+          {
+            "display_name": "1.5",
+            "value": 1.5,
+            "us_size_equivalent": 1.5
+          },
+          {
+            "display_name": "2",
+            "value": 2,
+            "us_size_equivalent": 2
+          },
+          {
+            "display_name": "2.5",
+            "value": 2.5,
+            "us_size_equivalent": 2.5
+          },
+          {
+            "display_name": "3",
+            "value": 3,
+            "us_size_equivalent": 3
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "200000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/107/858/554/original/1252847_00.png.png",
+        "retail_price_cents": "9000",
+        "colorway": "Blue Chill/Deep Royal Blue/Active Pink",
+        "nickname": "Bubbles",
+        "requires_listing_pictures": false,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      },
+      "success": true
+    }
+  }
+}

@@ -1,0 +1,352 @@
+{
+  "query": "Jordan 1 Low",
+  "size": "10",
+  "timestamp": "2025-08-06T22:32:11.206671",
+  "processing_time": 3.49,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "calculations": {
+    "step_1_stockx_analysis": {
+      "stockx_bid": 365.0,
+      "stockx_ask": 420.0,
+      "bid_ask_spread": 55.0,
+      "stockx_product_name": "Jordan 1 Retro Low OG SP Travis Scott Velvet Brown",
+      "stockx_sku": "DM7866-202",
+      "stockx_url": "https://stockx.com/air-jordan-1-retro-low-og-sp-travis-scott-velvet-brown",
+      "search_query": "Jordan 1 Low",
+      "search_size": "10",
+      "notes": "Retrieved current StockX bid and ask prices"
+    },
+    "step_2_volume_check": {
+      "weekly_sales": 17.5,
+      "is_high_volume": true,
+      "threshold": 3,
+      "notes": "High volume = 3+ sales per week. Current: 17.5 sales/week"
+    },
+    "step_3_ask_calculation": {
+      "original_ask": 420.0,
+      "ask_minus_20_percent": 336.0,
+      "calculation": "420.0 \u00d7 0.8 = 336.0",
+      "rounded_to_tens": 340,
+      "notes": "High volume: Use 20% less than ask, rounded to nearest $10"
+    },
+    "step_4_bid_analysis": {
+      "stockx_bid": "$365",
+      "notes": "Current StockX bid price"
+    },
+    "step_5_alias_comparison": {
+      "goat_ship_to_verify": 225.0,
+      "goat_consignment": 320.0,
+      "goat_ask_used": 225.0,
+      "alias_product_name": "Nigel Sylvester x Air Jordan 1 Low OG 'Better With Time'",
+      "alias_sku": "IB8958 001",
+      "alias_catalog_id": "nigel-sylvester-x-air-jordan-1-low-og-nitro-ib8958-001",
+      "search_query": "Jordan 1 Low",
+      "search_size": "10",
+      "notes": "Use lower of ship-to-verify or consignment price from GOAT/Alias"
+    },
+    "step_6_final_decision": {
+      "final_price": 340,
+      "decision_reason": "High volume (17.5 sales/week): Use 20% less than ask",
+      "recommendation": "\u2705 BUY AT $340: High volume (17.5 sales/week): Use 20% less than ask"
+    }
+  },
+  "final_recommendation": {
+    "action": "BUY",
+    "price": 340,
+    "reason": "High volume (17.5 sales/week): Use 20% less than ask",
+    "recommendation": "\u2705 BUY AT $340: High volume (17.5 sales/week): Use 20% less than ask",
+    "confidence": "HIGH"
+  },
+  "raw_data": {
+    "stockx": {
+      "bid": "$365",
+      "ask": "$420",
+      "product_name": "Jordan 1 Retro Low OG SP Travis Scott Velvet Brown",
+      "sku": "DM7866-202",
+      "url": "https://stockx.com/air-jordan-1-retro-low-og-sp-travis-scott-velvet-brown",
+      "search_query": "Jordan 1 Low",
+      "search_size": "10",
+      "success": true
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 225.0,
+        "consignment_price": 320.0,
+        "lowest_with_you": 225.0,
+        "lowest_consigned": 320.0,
+        "last_with_you_price": 225.0,
+        "last_with_you_date": "2025-08-06T23:16:42.743Z",
+        "last_consigned_price": 498.0,
+        "last_consigned_date": "2025-08-05T22:54:53.797Z",
+        "alias_sku": "IB8958 001"
+      },
+      "sales_volume": {
+        "sales_per_week": 17.5,
+        "total_sales": 20,
+        "period_days": 8,
+        "earliest_sale": "2025-07-29T05:56:22.599000+00:00",
+        "latest_sale": "2025-08-06T23:16:42.743000+00:00"
+      },
+      "catalog_match": {
+        "catalog_id": "nigel-sylvester-x-air-jordan-1-low-og-nitro-ib8958-001",
+        "name": "Nigel Sylvester x Air Jordan 1 Low OG 'Better With Time'",
+        "sku": "IB8958 001",
+        "brand": "Air Jordan",
+        "gender": "men",
+        "release_date": "2025-08-16T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "3",
+            "value": 3,
+            "us_size_equivalent": 3
+          },
+          {
+            "display_name": "3.5",
+            "value": 3.5,
+            "us_size_equivalent": 3.5
+          },
+          {
+            "display_name": "4",
+            "value": 4,
+            "us_size_equivalent": 4
+          },
+          {
+            "display_name": "4.5",
+            "value": 4.5,
+            "us_size_equivalent": 4.5
+          },
+          {
+            "display_name": "5",
+            "value": 5,
+            "us_size_equivalent": 5
+          },
+          {
+            "display_name": "5.5",
+            "value": 5.5,
+            "us_size_equivalent": 5.5
+          },
+          {
+            "display_name": "6",
+            "value": 6,
+            "us_size_equivalent": 6
+          },
+          {
+            "display_name": "6.5",
+            "value": 6.5,
+            "us_size_equivalent": 6.5
+          },
+          {
+            "display_name": "7",
+            "value": 7,
+            "us_size_equivalent": 7
+          },
+          {
+            "display_name": "7.5",
+            "value": 7.5,
+            "us_size_equivalent": 7.5
+          },
+          {
+            "display_name": "8",
+            "value": 8,
+            "us_size_equivalent": 8
+          },
+          {
+            "display_name": "8.5",
+            "value": 8.5,
+            "us_size_equivalent": 8.5
+          },
+          {
+            "display_name": "9",
+            "value": 9,
+            "us_size_equivalent": 9
+          },
+          {
+            "display_name": "9.5",
+            "value": 9.5,
+            "us_size_equivalent": 9.5
+          },
+          {
+            "display_name": "10",
+            "value": 10,
+            "us_size_equivalent": 10
+          },
+          {
+            "display_name": "10.5",
+            "value": 10.5,
+            "us_size_equivalent": 10.5
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "11.5",
+            "value": 11.5,
+            "us_size_equivalent": 11.5
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "12.5",
+            "value": 12.5,
+            "us_size_equivalent": 12.5
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "13.5",
+            "value": 13.5,
+            "us_size_equivalent": 13.5
+          },
+          {
+            "display_name": "14",
+            "value": 14,
+            "us_size_equivalent": 14
+          },
+          {
+            "display_name": "14.5",
+            "value": 14.5,
+            "us_size_equivalent": 14.5
+          },
+          {
+            "display_name": "15",
+            "value": 15,
+            "us_size_equivalent": 15
+          },
+          {
+            "display_name": "15.5",
+            "value": 15.5,
+            "us_size_equivalent": 15.5
+          },
+          {
+            "display_name": "16",
+            "value": 16,
+            "us_size_equivalent": 16
+          },
+          {
+            "display_name": "16.5",
+            "value": 16.5,
+            "us_size_equivalent": 16.5
+          },
+          {
+            "display_name": "17",
+            "value": 17,
+            "us_size_equivalent": 17
+          },
+          {
+            "display_name": "17.5",
+            "value": 17.5,
+            "us_size_equivalent": 17.5
+          },
+          {
+            "display_name": "18",
+            "value": 18,
+            "us_size_equivalent": 18
+          },
+          {
+            "display_name": "18.5",
+            "value": 18.5,
+            "us_size_equivalent": 18.5
+          },
+          {
+            "display_name": "19",
+            "value": 19,
+            "us_size_equivalent": 19
+          },
+          {
+            "display_name": "19.5",
+            "value": 19.5,
+            "us_size_equivalent": 19.5
+          },
+          {
+            "display_name": "20",
+            "value": 20,
+            "us_size_equivalent": 20
+          },
+          {
+            "display_name": "20.5",
+            "value": 20.5,
+            "us_size_equivalent": 20.5
+          },
+          {
+            "display_name": "21",
+            "value": 21,
+            "us_size_equivalent": 21
+          },
+          {
+            "display_name": "21.5",
+            "value": 21.5,
+            "us_size_equivalent": 21.5
+          },
+          {
+            "display_name": "22",
+            "value": 22,
+            "us_size_equivalent": 22
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "200000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/111/749/946/original/IB8958_001.png.png",
+        "retail_price_cents": "16000",
+        "colorway": "Black/Muslin/Varsity Red",
+        "nickname": "Better With Time",
+        "requires_listing_pictures": false,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      },
+      "search_query": "Jordan 1 Low",
+      "search_size": "10",
+      "success": true
+    }
+  },
+  "alternatives": {
+    "stockx_alternatives": [],
+    "alias_alternatives": [],
+    "search_query": "Jordan 1 Low",
+    "size": "10"
+  }
+}
