@@ -47,25 +47,83 @@ class AdvancedShoeAnalyzer:
             'success': False,
             'errors': [],
             'warnings': [],
+            'sku_mismatch_warning': None,  # New field for prominent SKU mismatch warnings
             'calculations': {},
             'final_recommendation': {},
-            'raw_data': {}
+            'raw_data': {},
+            'search_metadata': {}
         }
 
         try:
             # Step 1: Get StockX data
             print("📊 Step 1: Getting StockX data...")
             stockx_data = self._get_stockx_data(shoe_query, size)
-            result['raw_data']['stockx'] = stockx_data
+            
+            # Separate raw API data from search metadata
+            stockx_raw = {k: v for k, v in stockx_data.items() if k not in ['search_query', 'search_size', 'success']}
+            stockx_metadata = {k: v for k, v in stockx_data.items() if k in ['search_query', 'search_size', 'success']}
+            
+            result['raw_data']['stockx'] = stockx_raw
+            result['search_metadata']['stockx'] = stockx_metadata
             
             # Step 2: Get Alias/GOAT data
             print("📈 Step 2: Getting Alias/GOAT data...")
             alias_data = self._get_alias_data(shoe_query, size)
-            result['raw_data']['alias'] = alias_data
+            
+            # Separate raw API data from search metadata
+            alias_raw = {k: v for k, v in alias_data.items() if k not in ['search_query', 'search_size', 'success']}
+            alias_metadata = {k: v for k, v in alias_data.items() if k in ['search_query', 'search_size', 'success']}
+            
+            result['raw_data']['alias'] = alias_raw
+            result['search_metadata']['alias'] = alias_metadata
+            
+            # Check for SKU mismatch and create prominent warning
+            sku_mismatch = self._check_sku_mismatch(stockx_raw, alias_raw)
+            if sku_mismatch:
+                result['sku_mismatch_warning'] = sku_mismatch
+                print(f"🚨 CRITICAL SKU MISMATCH: {sku_mismatch['message']}")
+                
+                # Try to find corresponding match on the other platform
+                print(f"   🔄 {sku_mismatch['recommendation']}")
+                corresponding_match = self._find_corresponding_match(
+                    sku_mismatch['better_sku'], 
+                    sku_mismatch['better_name'], 
+                    sku_mismatch['worse_match']
+                )
+                
+                if corresponding_match:
+                    print(f"   ✅ Found corresponding {sku_mismatch['worse_match']} match!")
+                    # Update the data with the corresponding match
+                    if sku_mismatch['worse_match'] == 'alias':
+                        alias_raw = corresponding_match
+                        result['raw_data']['alias'] = alias_raw
+                        # Update metadata
+                        alias_metadata = {
+                            'search_query': sku_mismatch['better_sku'],
+                            'search_size': size,
+                            'success': True
+                        }
+                        result['search_metadata']['alias'] = alias_metadata
+                    else:  # worse_match == 'stockx'
+                        stockx_raw = corresponding_match
+                        result['raw_data']['stockx'] = stockx_raw
+                        # Update metadata
+                        stockx_metadata = {
+                            'search_query': sku_mismatch['better_sku'],
+                            'search_size': size,
+                            'success': True
+                        }
+                        result['search_metadata']['stockx'] = stockx_metadata
+                    
+                    # Clear the SKU mismatch warning since we found a match
+                    result['sku_mismatch_warning'] = None
+                    print(f"   ✅ SKU mismatch resolved! Using {sku_mismatch['better_match']} match on both platforms.")
+                else:
+                    print(f"   ❌ Could not find corresponding {sku_mismatch['worse_match']} match. Keeping alternatives.")
             
             # Step 3: Apply pricing logic with detailed calculations
             print("🧮 Step 3: Applying pricing logic...")
-            pricing_logic = self._apply_pricing_logic(stockx_data, alias_data, size)
+            pricing_logic = self._apply_pricing_logic(stockx_raw, alias_raw, stockx_metadata, alias_metadata, size)
             result['calculations'] = pricing_logic
             
             # Step 4: Generate final recommendation
@@ -124,7 +182,7 @@ class AdvancedShoeAnalyzer:
                     'search_size': size
                 }
             
-            # Extract the data we need
+            # Extract the raw API data and search metadata
             return {
                 'bid': item.stockx_bid,
                 'ask': item.stockx_ask,
@@ -357,50 +415,111 @@ class AdvancedShoeAnalyzer:
         return list(set(variations))  # Remove duplicates
 
     def _calculate_weekly_sales(self, sales_data: List[Dict]) -> Dict:
-        """Calculate weekly sales from sales data"""
+        """Calculate sales across multiple time periods from sales data"""
         if not sales_data:
-            return {'sales_per_week': 0, 'total_sales': 0, 'period_days': 0}
+            return {
+                'sales_per_week': 0, 'sales_per_month': 0, 'sales_per_3months': 0, 
+                'sales_per_6months': 0, 'sales_per_year': 0, 'total_sales': 0, 'period_days': 0
+            }
         
-        # Get date range
-        dates = [sale.get('purchased_at') for sale in sales_data if sale.get('purchased_at')]
+        # Get current time (use UTC to match API timestamps)
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        one_week_ago = now - timedelta(days=7)
+        one_month_ago = now - timedelta(days=30)
+        three_months_ago = now - timedelta(days=90)
+        six_months_ago = now - timedelta(days=180)
+        one_year_ago = now - timedelta(days=365)
         
-        if not dates:
-            return {'sales_per_week': 0, 'total_sales': len(sales_data), 'period_days': 0}
+        # Filter sales from different time periods
+        recent_sales_week = []
+        recent_sales_month = []
+        recent_sales_3months = []
+        recent_sales_6months = []
+        recent_sales_year = []
+        all_dates = []
         
-        # Parse dates
-        try:
-            parsed_dates = []
-            for date_str in dates:
-                if date_str:
+        for sale in sales_data:
+            date_str = sale.get('purchased_at')
+            if date_str:
+                try:
                     # Handle ISO format
                     if 'T' in date_str:
                         dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                     else:
                         dt = datetime.fromisoformat(date_str)
-                    parsed_dates.append(dt)
-            
-            if parsed_dates:
-                earliest = min(parsed_dates)
-                latest = max(parsed_dates)
-                period_days = max(1, (latest - earliest).days)
-                
-                # Calculate weekly sales
-                total_sales = len(sales_data)
-                sales_per_week = (total_sales / period_days) * 7
-                
-                return {
-                    'sales_per_week': round(sales_per_week, 2),
-                    'total_sales': total_sales,
-                    'period_days': period_days,
-                    'earliest_sale': earliest.isoformat(),
-                    'latest_sale': latest.isoformat()
-                }
-        except Exception as e:
-            pass
+                    
+                    all_dates.append(dt)
+                    
+                    # Count sales from different periods
+                    if dt >= one_week_ago:
+                        recent_sales_week.append(sale)
+                    if dt >= one_month_ago:
+                        recent_sales_month.append(sale)
+                    if dt >= three_months_ago:
+                        recent_sales_3months.append(sale)
+                    if dt >= six_months_ago:
+                        recent_sales_6months.append(sale)
+                    if dt >= one_year_ago:
+                        recent_sales_year.append(sale)
+                        
+                except Exception as e:
+                    continue
         
-        return {'sales_per_week': 0, 'total_sales': len(sales_data), 'period_days': 0}
+        # Calculate sales for each period
+        sales_this_week = len(recent_sales_week)
+        sales_this_month = len(recent_sales_month)
+        sales_this_3months = len(recent_sales_3months)
+        sales_this_6months = len(recent_sales_6months)
+        sales_this_year = len(recent_sales_year)
+        
+        # Get the last 5 sales for detailed analysis
+        sorted_sales = sorted(sales_data, key=lambda x: x.get('purchased_at', ''), reverse=True)
+        last_5_sales = []
+        for sale in sorted_sales[:5]:
+            date_str = sale.get('purchased_at')
+            price = sale.get('price_cents')
+            if date_str and price:
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    price_dollars = float(price) / 100 if price else None
+                    last_5_sales.append({
+                        'date': dt.isoformat(),
+                        'price': price_dollars,
+                        'price_cents': price
+                    })
+                except Exception as e:
+                    continue
+        
+        # Get overall date range for context
+        if all_dates:
+            earliest = min(all_dates)
+            latest = max(all_dates)
+            period_days = max(1, (latest - earliest).days)
+        else:
+            period_days = 0
+            earliest = None
+            latest = None
+        
+        return {
+            'sales_per_week': round(sales_this_week, 2),
+            'sales_per_month': round(sales_this_month, 2),
+            'sales_per_3months': round(sales_this_3months, 2),
+            'sales_per_6months': round(sales_this_6months, 2),
+            'sales_per_year': round(sales_this_year, 2),
+            'total_sales': len(sales_data),
+            'sales_this_week': sales_this_week,
+            'sales_this_month': sales_this_month,
+            'sales_this_3months': sales_this_3months,
+            'sales_this_6months': sales_this_6months,
+            'sales_this_year': sales_this_year,
+            'last_5_sales': last_5_sales,
+            'period_days': period_days,
+            'earliest_sale': earliest.isoformat() if earliest else None,
+            'latest_sale': latest.isoformat() if latest else None
+        }
 
-    def _apply_pricing_logic(self, stockx_data: Dict, alias_data: Dict, size: str) -> Dict:
+    def _apply_pricing_logic(self, stockx_data: Dict, alias_data: Dict, stockx_metadata: Dict, alias_metadata: Dict, size: str) -> Dict:
         """
         Apply the specific pricing logic with all calculations shown
         """
@@ -438,8 +557,8 @@ class AdvancedShoeAnalyzer:
             'stockx_product_name': stockx_data.get('product_name'),
             'stockx_sku': stockx_data.get('sku'),
             'stockx_url': stockx_data.get('url'),
-            'search_query': stockx_data.get('search_query'),
-            'search_size': stockx_data.get('search_size'),
+            'search_query': stockx_metadata.get('search_query'),
+            'search_size': stockx_metadata.get('search_size'),
             'notes': 'Retrieved current StockX bid and ask prices'
         }
         
@@ -503,8 +622,8 @@ class AdvancedShoeAnalyzer:
             'alias_product_name': alias_data.get('catalog_match', {}).get('name'),
             'alias_sku': alias_data.get('catalog_match', {}).get('sku'),
             'alias_catalog_id': alias_data.get('catalog_match', {}).get('catalog_id'),
-            'search_query': alias_data.get('search_query'),
-            'search_size': alias_data.get('search_size'),
+            'search_query': alias_metadata.get('search_query'),
+            'search_size': alias_metadata.get('search_size'),
             'notes': 'Use lower of ship-to-verify or consignment price from GOAT/Alias'
         }
         
@@ -629,6 +748,114 @@ class AdvancedShoeAnalyzer:
             print(f"❌ Error deleting result: {e}")
             return False
 
+    def _find_corresponding_match(self, better_sku: str, better_name: str, worse_platform: str) -> Optional[Dict]:
+        """Find the corresponding match on the other platform using the better SKU"""
+        try:
+            if worse_platform == 'alias':
+                # Find corresponding Alias match using the better StockX SKU
+                print(f"   🔍 Finding corresponding Alias match for: {better_sku}")
+                
+                # Try searching with the better SKU
+                search_terms = self.sales_analyzer._extract_search_terms(better_sku)
+                catalog_match = self.sales_analyzer.search_catalog_improved(search_terms)
+                
+                if catalog_match:
+                    # Get pricing data for the new match
+                    pricing_data = self.stockx_analyzer.get_alias_pricing_data(better_sku, "10")
+                    
+                    # Get sales volume data
+                    try:
+                        size_float = 10.0
+                        sales_data = self.sales_analyzer._get_sales_for_size(
+                            catalog_match['catalog_id'], 
+                            size_float
+                        )
+                        weekly_sales = self._calculate_weekly_sales(sales_data)
+                    except Exception as e:
+                        weekly_sales = {'sales_per_week': 0, 'error': str(e)}
+                    
+                    return {
+                        'pricing': pricing_data or {},
+                        'sales_volume': weekly_sales,
+                        'catalog_match': catalog_match
+                    }
+            
+            elif worse_platform == 'stockx':
+                # Find corresponding StockX match using the better Alias SKU
+                print(f"   🔍 Finding corresponding StockX match for: {better_sku}")
+                
+                # Create a temporary inventory item
+                item = InventoryItem(shoe_name=better_sku, size="10")
+                item.is_sku_search = True
+                
+                # Apply SKU normalization
+                normalized_sku = self._normalize_sku_for_search(better_sku)
+                if normalized_sku != better_sku:
+                    item.shoe_name = normalized_sku
+                
+                # Search StockX
+                success = self.stockx_analyzer.search_stockx_for_item(item)
+                
+                if success:
+                    return {
+                        'bid': item.stockx_bid,
+                        'ask': item.stockx_ask,
+                        'product_name': item.stockx_shoe_name,
+                        'sku': item.stockx_sku,
+                        'url': item.stockx_url
+                    }
+            
+            return None
+            
+        except Exception as e:
+            print(f"   ❌ Error finding corresponding match: {e}")
+            return None
+
+    def _check_sku_mismatch(self, stockx_data: Dict, alias_data: Dict) -> Optional[Dict]:
+        """Check for SKU mismatch between StockX and Alias data"""
+        stockx_sku = stockx_data.get('sku', '')
+        alias_sku = alias_data.get('catalog_match', {}).get('sku', '')
+        
+        if not stockx_sku or not alias_sku:
+            return None
+        
+        # Normalize SKUs for comparison
+        stockx_normalized = self._normalize_sku_for_search(stockx_sku)
+        alias_normalized = self._normalize_sku_for_search(alias_sku)
+        
+        if stockx_normalized != alias_normalized:
+            # Determine which match is better (closer to the search query)
+            stockx_name = stockx_data.get('product_name', '')
+            alias_name = alias_data.get('catalog_match', {}).get('name', '')
+            
+            # For now, prefer StockX match as it's usually more accurate for SKU searches
+            # In the future, we could implement more sophisticated matching logic
+            better_match = 'stockx'
+            better_sku = stockx_sku
+            better_name = stockx_name
+            worse_match = 'alias'
+            worse_sku = alias_sku
+            worse_name = alias_name
+            
+            return {
+                'type': 'SKU_MISMATCH',
+                'severity': 'CRITICAL',
+                'message': f'StockX and Alias found different shoes! Using StockX match: {stockx_sku} ({stockx_name})',
+                'stockx_sku': stockx_sku,
+                'stockx_name': stockx_name,
+                'alias_sku': alias_sku,
+                'alias_name': alias_name,
+                'better_match': better_match,
+                'better_sku': better_sku,
+                'better_name': better_name,
+                'worse_match': worse_match,
+                'worse_sku': worse_sku,
+                'worse_name': worse_name,
+                'recommendation': f'Using {better_match.upper()} match. Finding corresponding {worse_match} match...'
+            }
+        
+        return None
+
     def _should_generate_alternatives(self, stockx_data: Dict, alias_data: Dict, shoe_query: str) -> bool:
         """Determine if alternatives should be auto-generated based on match quality"""
         
@@ -641,14 +868,9 @@ class AdvancedShoeAnalyzer:
             return True
         
         # Case 3: SKU mismatch detected
-        stockx_sku = stockx_data.get('sku', '')
-        alias_sku = alias_data.get('catalog_match', {}).get('sku', '')
-        if stockx_sku and alias_sku:
-            # Normalize SKUs for comparison
-            stockx_normalized = self._normalize_sku_for_search(stockx_sku)
-            alias_normalized = self._normalize_sku_for_search(alias_sku)
-            if stockx_normalized != alias_normalized:
-                return True
+        sku_mismatch = self._check_sku_mismatch(stockx_data, alias_data)
+        if sku_mismatch:
+            return True
         
         # Case 4: Poor quality matches (clothing when searching for shoes)
         stockx_name = stockx_data.get('product_name', '').lower()

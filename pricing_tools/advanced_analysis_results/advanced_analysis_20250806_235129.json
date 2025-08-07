@@ -1,0 +1,434 @@
+{
+  "query": "Jordan 1 High OG",
+  "size": "10",
+  "timestamp": "2025-08-06T23:51:23.926230",
+  "processing_time": 3.5,
+  "success": true,
+  "errors": [],
+  "warnings": [],
+  "sku_mismatch_warning": {
+    "type": "SKU_MISMATCH",
+    "severity": "CRITICAL",
+    "message": "StockX and Alias found different shoes! StockX: DZ5485-008 (Jordan 1 Retro High OG Shattered Backboard (2025)) vs Alias: 555088 036 (Air Jordan 1 High OG 'Rebellionaire')",
+    "stockx_sku": "DZ5485-008",
+    "stockx_name": "Jordan 1 Retro High OG Shattered Backboard (2025)",
+    "alias_sku": "555088 036",
+    "alias_name": "Air Jordan 1 High OG 'Rebellionaire'",
+    "recommendation": "Use alternatives to find the correct match or search with the exact SKU"
+  },
+  "calculations": {
+    "step_1_stockx_analysis": {
+      "stockx_bid": 171.0,
+      "stockx_ask": 192.0,
+      "bid_ask_spread": 21.0,
+      "stockx_product_name": "Jordan 1 Retro High OG Shattered Backboard (2025)",
+      "stockx_sku": "DZ5485-008",
+      "stockx_url": "https://stockx.com/air-jordan-1-retro-high-og-shattered-backboard-2025",
+      "search_query": "Jordan 1 High OG",
+      "search_size": "10",
+      "notes": "Retrieved current StockX bid and ask prices"
+    },
+    "step_2_volume_check": {
+      "weekly_sales": 0,
+      "is_high_volume": false,
+      "threshold": 3,
+      "notes": "High volume = 3+ sales per week. Current: 0 sales/week"
+    },
+    "step_3_ask_calculation": {
+      "applies": false,
+      "reason": "Low volume or no ask price available",
+      "notes": "Low volume: Skip ask calculation, go to bid analysis"
+    },
+    "step_4_bid_analysis": {
+      "stockx_bid": "$171",
+      "notes": "Current StockX bid price"
+    },
+    "step_5_alias_comparison": {
+      "goat_ship_to_verify": 215.0,
+      "goat_consignment": 260.0,
+      "goat_ask_used": 215.0,
+      "alias_product_name": "Air Jordan 1 High OG 'Rebellionaire'",
+      "alias_sku": "555088 036",
+      "alias_catalog_id": "air-jordan-1-high-og-rebellionaire-555088-036",
+      "search_query": "Jordan 1 High OG",
+      "search_size": "10",
+      "notes": "Use lower of ship-to-verify or consignment price from GOAT/Alias"
+    },
+    "step_6_final_decision": {
+      "final_price": null,
+      "decision_reason": "Low volume: Bid ($171.0) too low vs GOAT ask ($215.0)",
+      "recommendation": "\u274c NO PURCHASE: Low volume: Bid ($171.0) too low vs GOAT ask ($215.0)"
+    }
+  },
+  "final_recommendation": {
+    "action": "NO PURCHASE",
+    "price": null,
+    "reason": "Low volume: Bid ($171.0) too low vs GOAT ask ($215.0)",
+    "recommendation": "\u274c NO PURCHASE: Low volume: Bid ($171.0) too low vs GOAT ask ($215.0)",
+    "confidence": "MEDIUM"
+  },
+  "raw_data": {
+    "stockx": {
+      "bid": "$171",
+      "ask": "$192",
+      "product_name": "Jordan 1 Retro High OG Shattered Backboard (2025)",
+      "sku": "DZ5485-008",
+      "url": "https://stockx.com/air-jordan-1-retro-high-og-shattered-backboard-2025"
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 215.0,
+        "consignment_price": 260.0,
+        "lowest_with_you": 215.0,
+        "lowest_consigned": 260.0,
+        "last_with_you_price": 259.0,
+        "last_with_you_date": "2025-08-06T03:29:42.718Z",
+        "last_consigned_price": 259.0,
+        "last_consigned_date": "2025-08-06T03:29:42.718Z",
+        "alias_sku": "555088 036"
+      },
+      "sales_volume": {
+        "sales_per_week": 0,
+        "sales_per_month": 0,
+        "sales_per_3months": 0,
+        "sales_per_6months": 0,
+        "sales_per_year": 0,
+        "total_sales": 200,
+        "sales_this_week": 0,
+        "sales_this_month": 0,
+        "sales_this_3months": 0,
+        "sales_this_6months": 0,
+        "sales_this_year": 0,
+        "last_5_sales": [
+          {
+            "date": "2025-08-06T03:29:42.718000+00:00",
+            "price": 259.0,
+            "price_cents": "25900"
+          },
+          {
+            "date": "2025-08-05T17:51:07.325000+00:00",
+            "price": 224.0,
+            "price_cents": "22400"
+          },
+          {
+            "date": "2025-07-24T15:52:25.693000+00:00",
+            "price": 228.0,
+            "price_cents": "22800"
+          },
+          {
+            "date": "2025-07-21T08:31:04.830000+00:00",
+            "price": 259.0,
+            "price_cents": "25900"
+          },
+          {
+            "date": "2025-07-11T23:45:15.416000+00:00",
+            "price": 241.0,
+            "price_cents": "24100"
+          }
+        ],
+        "period_days": 597,
+        "earliest_sale": "2023-12-17T03:51:36.769000+00:00",
+        "latest_sale": "2025-08-06T03:29:42.718000+00:00"
+      },
+      "catalog_match": {
+        "catalog_id": "air-jordan-1-high-og-rebellionaire-555088-036",
+        "name": "Air Jordan 1 High OG 'Rebellionaire'",
+        "sku": "555088 036",
+        "brand": "Air Jordan",
+        "gender": "men",
+        "release_date": "2022-03-12T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "3",
+            "value": 3,
+            "us_size_equivalent": 3
+          },
+          {
+            "display_name": "3.5",
+            "value": 3.5,
+            "us_size_equivalent": 3.5
+          },
+          {
+            "display_name": "4",
+            "value": 4,
+            "us_size_equivalent": 4
+          },
+          {
+            "display_name": "4.5",
+            "value": 4.5,
+            "us_size_equivalent": 4.5
+          },
+          {
+            "display_name": "5",
+            "value": 5,
+            "us_size_equivalent": 5
+          },
+          {
+            "display_name": "5.5",
+            "value": 5.5,
+            "us_size_equivalent": 5.5
+          },
+          {
+            "display_name": "6",
+            "value": 6,
+            "us_size_equivalent": 6
+          },
+          {
+            "display_name": "6.5",
+            "value": 6.5,
+            "us_size_equivalent": 6.5
+          },
+          {
+            "display_name": "7",
+            "value": 7,
+            "us_size_equivalent": 7
+          },
+          {
+            "display_name": "7.5",
+            "value": 7.5,
+            "us_size_equivalent": 7.5
+          },
+          {
+            "display_name": "8",
+            "value": 8,
+            "us_size_equivalent": 8
+          },
+          {
+            "display_name": "8.5",
+            "value": 8.5,
+            "us_size_equivalent": 8.5
+          },
+          {
+            "display_name": "9",
+            "value": 9,
+            "us_size_equivalent": 9
+          },
+          {
+            "display_name": "9.5",
+            "value": 9.5,
+            "us_size_equivalent": 9.5
+          },
+          {
+            "display_name": "10",
+            "value": 10,
+            "us_size_equivalent": 10
+          },
+          {
+            "display_name": "10.5",
+            "value": 10.5,
+            "us_size_equivalent": 10.5
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "11.5",
+            "value": 11.5,
+            "us_size_equivalent": 11.5
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "12.5",
+            "value": 12.5,
+            "us_size_equivalent": 12.5
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "13.5",
+            "value": 13.5,
+            "us_size_equivalent": 13.5
+          },
+          {
+            "display_name": "14",
+            "value": 14,
+            "us_size_equivalent": 14
+          },
+          {
+            "display_name": "14.5",
+            "value": 14.5,
+            "us_size_equivalent": 14.5
+          },
+          {
+            "display_name": "15",
+            "value": 15,
+            "us_size_equivalent": 15
+          },
+          {
+            "display_name": "15.5",
+            "value": 15.5,
+            "us_size_equivalent": 15.5
+          },
+          {
+            "display_name": "16",
+            "value": 16,
+            "us_size_equivalent": 16
+          },
+          {
+            "display_name": "16.5",
+            "value": 16.5,
+            "us_size_equivalent": 16.5
+          },
+          {
+            "display_name": "17",
+            "value": 17,
+            "us_size_equivalent": 17
+          },
+          {
+            "display_name": "17.5",
+            "value": 17.5,
+            "us_size_equivalent": 17.5
+          },
+          {
+            "display_name": "18",
+            "value": 18,
+            "us_size_equivalent": 18
+          },
+          {
+            "display_name": "18.5",
+            "value": 18.5,
+            "us_size_equivalent": 18.5
+          },
+          {
+            "display_name": "19",
+            "value": 19,
+            "us_size_equivalent": 19
+          },
+          {
+            "display_name": "19.5",
+            "value": 19.5,
+            "us_size_equivalent": 19.5
+          },
+          {
+            "display_name": "20",
+            "value": 20,
+            "us_size_equivalent": 20
+          },
+          {
+            "display_name": "20.5",
+            "value": 20.5,
+            "us_size_equivalent": 20.5
+          },
+          {
+            "display_name": "21",
+            "value": 21,
+            "us_size_equivalent": 21
+          },
+          {
+            "display_name": "21.5",
+            "value": 21.5,
+            "us_size_equivalent": 21.5
+          },
+          {
+            "display_name": "22",
+            "value": 22,
+            "us_size_equivalent": 22
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "200000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/069/236/749/original/838649_00.png.png",
+        "retail_price_cents": "17000",
+        "colorway": "Black/White/Particle Grey",
+        "nickname": "Rebellionaire",
+        "requires_listing_pictures": false,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      }
+    }
+  },
+  "search_metadata": {
+    "stockx": {
+      "search_query": "Jordan 1 High OG",
+      "search_size": "10",
+      "success": true
+    },
+    "alias": {
+      "search_query": "Jordan 1 High OG",
+      "search_size": "10",
+      "success": true
+    }
+  },
+  "alternatives": {
+    "stockx_alternatives": [
+      {
+        "sku": "DZ5485-008",
+        "name": "Jordan 1 Retro High OG Shattered Backboard (2025)",
+        "url": "https://stockx.com/air-jordan-1-retro-high-og-shattered-backboard-2025",
+        "variation": "Jordan 1 High OG"
+      },
+      {
+        "sku": "DZ5485-008",
+        "name": "Jordan 1 Retro High OG Shattered Backboard (2025)",
+        "url": "https://stockx.com/air-jordan-1-retro-high-og-shattered-backboard-2025",
+        "variation": "Air Jordan 1 High OG"
+      }
+    ],
+    "alias_alternatives": [
+      {
+        "sku": "555088 036",
+        "name": "Air Jordan 1 High OG 'Rebellionaire'",
+        "catalog_id": "air-jordan-1-high-og-rebellionaire-555088-036",
+        "search_term": "Jordan 1 High OG"
+      },
+      {
+        "sku": "DZ5485 008",
+        "name": "Air Jordan 1 Retro High OG 'Shattered Backboard' 2025",
+        "catalog_id": "air-jordan-1-retro-high-og-shattered-backboard-2025-dz5485-008",
+        "search_term": "Air Jordan 1"
+      },
+      {
+        "sku": "DZ5485 008",
+        "name": "Air Jordan 1 Retro High OG 'Shattered Backboard' 2025",
+        "catalog_id": "air-jordan-1-retro-high-og-shattered-backboard-2025-dz5485-008",
+        "search_term": "Jordan 1"
+      }
+    ],
+    "search_query": "Jordan 1 High OG",
+    "size": "10"
+  }
+}

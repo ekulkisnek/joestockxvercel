@@ -1032,18 +1032,26 @@ class InventoryStockXAnalyzer:
             last_sale = sales_data[0] if sales_data else {}
             last_consigned = consigned_sales_data[0] if consigned_sales_data else {}
             
+            # Extract prices with better handling of None/0 values
+            ship_to_verify = cents_to_dollars(overall_data.get('lowest_listing_price_cents'))
+            consignment = cents_to_dollars(consigned_data.get('lowest_listing_price_cents'))
+            
+            # If consignment price is None or 0, it means no consigned listings available
+            if consignment is None or consignment == 0:
+                consignment = None
+            
             result = {
                 # Ship to verify price
-                'ship_to_verify_price': cents_to_dollars(overall_data.get('lowest_listing_price_cents')),
+                'ship_to_verify_price': ship_to_verify,
                 
-                # Consignment price  
-                'consignment_price': cents_to_dollars(consigned_data.get('lowest_listing_price_cents')),
+                # Consignment price (None if no consigned listings)
+                'consignment_price': consignment,
                 
                 # Lowest with you (overall lowest)
-                'lowest_with_you': cents_to_dollars(overall_data.get('lowest_listing_price_cents')),
+                'lowest_with_you': ship_to_verify,
                 
-                # Lowest consigned
-                'lowest_consigned': cents_to_dollars(consigned_data.get('lowest_listing_price_cents')),
+                # Lowest consigned (None if no consigned listings)
+                'lowest_consigned': consignment,
                 
                 # Last with you (most recent sale)
                 'last_with_you_price': cents_to_dollars(last_sale.get('price_cents')),
