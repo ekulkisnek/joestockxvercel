@@ -633,12 +633,12 @@ class AdvancedShoeAnalyzer:
         calculation_breakdown = ""
         
         if is_high_volume and stockx_ask_float:
-            # High volume: Use 20% less than ask (rounded)
-            final_price = calculations['step_3_ask_calculation']['rounded_to_tens']
+            # High volume: Use 20% less than ask
             original_ask = stockx_ask_float
             ask_minus_20 = original_ask * 0.8
-            decision_reason = f"High volume ({weekly_sales} sales/week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}, rounded to ${final_price}"
-            calculation_breakdown = f"${original_ask} × 0.8 = ${ask_minus_20:.1f} → ${final_price}"
+            final_price = ask_minus_20
+            decision_reason = f"High volume ({weekly_sales} sales/week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}"
+            calculation_breakdown = f"${original_ask} × 0.8 = ${ask_minus_20:.1f}"
         elif stockx_bid_float and goat_absolute_lowest:
             # Low volume: New logic - use 15% less than GOAT absolute lowest
             goat_lowest = goat_absolute_lowest
@@ -647,25 +647,23 @@ class AdvancedShoeAnalyzer:
             
             # Calculate fair price as 15% less than GOAT absolute lowest
             fair_price = goat_lowest * 0.85
-            fair_price_rounded = round(fair_price / 10) * 10
             
-            final_price = fair_price_rounded
+            final_price = fair_price
             decision_reason = f"Low volume ({weekly_sales} sales/week): StockX Bid (${bid_price}) is {percent_diff:+.1f}% vs GOAT/Alias absolute lowest (${goat_lowest})"
-            calculation_breakdown = f"${goat_lowest} × 0.85 = ${fair_price:.1f} → ${fair_price_rounded}"
+            calculation_breakdown = f"${goat_lowest} × 0.85 = ${fair_price:.1f}"
         elif stockx_bid_float:
             # Only StockX bid available - use 10% less than bid
             bid_price = stockx_bid_float
             fair_price = bid_price * 0.9
-            fair_price_rounded = round(fair_price / 10) * 10
             
-            final_price = fair_price_rounded
+            final_price = fair_price
             decision_reason = f"Low volume ({weekly_sales} sales/week): Only StockX bid available (${bid_price})"
-            calculation_breakdown = f"${bid_price} × 0.9 = ${fair_price:.1f} → ${fair_price_rounded}"
+            calculation_breakdown = f"${bid_price} × 0.9 = ${fair_price:.1f}"
         else:
-            # No pricing data - use a default calculation
-            final_price = 100  # Default price
-            decision_reason = f"Low volume ({weekly_sales} sales/week): No pricing data available"
-            calculation_breakdown = "Default price: $100"
+            # No pricing data available
+            final_price = None
+            decision_reason = f"Low volume ({weekly_sales} sales/week): No pricing data available - check alternative options"
+            calculation_breakdown = "No data available"
         
         calculations['step_6_final_decision'] = {
             'final_price': final_price,
@@ -678,7 +676,10 @@ class AdvancedShoeAnalyzer:
 
     def _get_recommendation_text(self, final_price: Optional[float], reason: str, calculation: str) -> str:
         """Generate recommendation text with calculation breakdown"""
-        return f"✅ BUY AT ${final_price}: {reason} | {calculation}"
+        if final_price is None:
+            return f"❌ NOT FOUND: {reason} | {calculation}"
+        else:
+            return f"✅ BUY AT ${final_price:.1f}: {reason} | {calculation}"
 
     def _generate_recommendation(self, calculations: Dict) -> Dict:
         """Generate final recommendation summary"""

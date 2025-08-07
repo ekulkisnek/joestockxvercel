@@ -814,6 +814,25 @@ HTML_TEMPLATE = """
         {% endif %}
     {% endwith %}
     
+    <div class="search-section">
+        <h2>🎯 Advanced Shoe Analysis</h2>
+        <p>Get detailed pricing analysis with your specific logic and all calculations shown</p>
+        <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
+            <label for="advanced_shoe_query">Enter shoe name or SKU:</label><br>
+            <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
+            <label for="shoe_size">Size:</label><br>
+            <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
+            <input type="submit" value="🎯 Analyze with Pricing Logic" class="search-button" style="background: #dc3545; color: white; padding: 10px 20px; font-weight: bold;">
+        </form>
+        <p><small><strong>Features:</strong> StockX + GOAT data, sales volume analysis, detailed calculations, automatic result saving</small></p>
+        
+        <div style="margin: 15px 0;">
+            <a href="/advanced_results" style="background: #17a2b8; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;">
+                📋 View All Saved Results
+            </a>
+        </div>
+    </div>
+    
     <div class="auth-section">
         <h2>🔐 Authentication Status</h2>
         {% if authenticated %}
@@ -887,24 +906,7 @@ HTML_TEMPLATE = """
         {% endif %}
     </div>
     
-    <div class="search-section">
-        <h2>🎯 Advanced Shoe Analysis</h2>
-        <p>Get detailed pricing analysis with your specific logic and all calculations shown</p>
-        <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
-            <label for="advanced_shoe_query">Enter shoe name or SKU:</label><br>
-            <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
-            <label for="shoe_size">Size:</label><br>
-            <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
-            <input type="submit" value="🎯 Analyze with Pricing Logic" class="search-button" style="background: #dc3545; color: white; padding: 10px 20px; font-weight: bold;">
-        </form>
-        <p><small><strong>Features:</strong> StockX + GOAT data, sales volume analysis, detailed calculations, automatic result saving</small></p>
-        
-        <div style="margin: 15px 0;">
-            <a href="/advanced_results" style="background: #17a2b8; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;">
-                📋 View All Saved Results
-            </a>
-        </div>
-    </div>
+
     
     <div class="search-section">
         <h2>🔍 Product Search</h2>
@@ -2014,23 +2016,23 @@ def render_advanced_analysis(result: dict) -> str:
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Week</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_week', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_week', 0), 'week')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📆 Sales Last Month</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_month', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_month', 0), 'month')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📊 Sales Last 3 Months</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_3months', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_3months', 0), '3 months')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📈 Sales Last 6 Months</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_6months', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_6months', 0), '6 months')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Year</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_year', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_year', 0), 'year')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📋 Total Sales</h4>
@@ -2084,36 +2086,36 @@ def render_advanced_analysis(result: dict) -> str:
                     <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
                         <h4 style="color: #f1c40f;">📈 HIGH VOLUME PRICING (≥3 sales/week)</h4>
                         <p><strong>When to use:</strong> When weekly sales are 3 or more</p>
-                        <p><strong>Formula:</strong> StockX Ask × 0.8 → rounded to nearest $10</p>
+                        <p><strong>Formula:</strong> StockX Ask × 0.8</p>
                         <p><strong>What you pay:</strong> 20% less than StockX ask price</p>
-                        <p><strong>Example:</strong> StockX Ask $192 × 0.8 = $153.6 → $150</p>
+                        <p><strong>Example:</strong> StockX Ask $192 × 0.8 = $153.6</p>
                         <p><strong>Logic:</strong> High volume means quick turnover, so we can be more aggressive with pricing</p>
                     </div>
                     
                     <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
                         <h4 style="color: #f1c40f;">📉 LOW VOLUME PRICING (<3 sales/week)</h4>
                         <p><strong>When to use:</strong> When weekly sales are less than 3</p>
-                        <p><strong>Formula:</strong> GOAT Absolute Lowest × 0.85 → rounded to nearest $10</p>
+                        <p><strong>Formula:</strong> GOAT Absolute Lowest × 0.85</p>
                         <p><strong>What you pay:</strong> 15% less than GOAT's absolute lowest price</p>
-                        <p><strong>Example:</strong> GOAT Lowest $481 × 0.85 = $408.8 → $410</p>
+                        <p><strong>Example:</strong> GOAT Lowest $481 × 0.85 = $408.8</p>
                         <p><strong>Logic:</strong> Low volume means slower turnover, so we need to be more conservative and base pricing on GOAT's market</p>
                     </div>
                     
                     <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
                         <h4 style="color: #f1c40f;">🔍 STOCKX ONLY PRICING</h4>
                         <p><strong>When to use:</strong> When only StockX data is available (no GOAT data)</p>
-                        <p><strong>Formula:</strong> StockX Bid × 0.9 → rounded to nearest $10</p>
+                        <p><strong>Formula:</strong> StockX Bid × 0.9</p>
                         <p><strong>What you pay:</strong> 10% less than StockX bid price</p>
-                        <p><strong>Example:</strong> StockX Bid $240 × 0.9 = $216 → $220</p>
+                        <p><strong>Example:</strong> StockX Bid $240 × 0.9 = $216</p>
                         <p><strong>Logic:</strong> Conservative approach when we only have one data source</p>
                     </div>
                     
                     <div class="calculation-detail" style="background: rgba(255,255,255,0.1); color: white;">
                         <h4 style="color: #f1c40f;">❓ NO DATA PRICING</h4>
                         <p><strong>When to use:</strong> When no pricing data is available</p>
-                        <p><strong>Formula:</strong> Default price of $100</p>
-                        <p><strong>What you pay:</strong> $100 (placeholder price)</p>
-                        <p><strong>Logic:</strong> Fallback price when no market data exists</p>
+                        <p><strong>Formula:</strong> No price calculated</p>
+                        <p><strong>What you pay:</strong> Check alternative options</p>
+                        <p><strong>Logic:</strong> When no market data exists, suggest checking alternatives</p>
                     </div>
                 </div>
                 
@@ -2328,6 +2330,13 @@ def get_best_sales_display(sales_volume: dict) -> tuple:
     
     # If all are 0, return the first one
     return periods[0][0], periods[0][1], sales_volume.get(periods[0][0], 0)
+
+def format_sales_display(value: int, period: str) -> str:
+    """Format sales display with 'last' instead of 'per'"""
+    if value == 0:
+        return f"0 last {period.lower()}"
+    else:
+        return f"{value} last {period.lower()}"
 
 def build_calculation_step_html(step_title: str, step_data: dict) -> str:
     """Build HTML for a calculation step"""
