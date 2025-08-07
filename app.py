@@ -2008,6 +2008,37 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                 </div>
                 
+                <!-- Sales Volume Information -->
+                <div class="calculation-step" style="background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; border-left: 5px solid #f39c12;">
+                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">📊 SALES VOLUME INFORMATION</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Week</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_week', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📆 Sales Last Month</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_month', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📊 Sales Last 3 Months</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_3months', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📈 Sales Last 6 Months</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_6months', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Year</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_year', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📋 Total Sales</h4>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('total_sales', 'N/A')}</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Verification Information -->
                 <div class="calculation-step">
                     <h3>🔍 Verification Information</h3>
