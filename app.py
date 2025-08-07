@@ -2007,7 +2007,7 @@ def render_advanced_analysis(result: dict) -> str:
                             <strong>🎯 Confidence Analysis:</strong><br>
                             {get_confidence_explanation(recommendation.get('confidence', 'Unknown'), result)}
                         </div>
-                        <div class="metric">Processing Time: {result.get('processing_time', 0)}s</div>
+                        <div class="metric" style="background: #f8f9fa; color: #495057; padding: 10px 15px; border-radius: 8px; margin: 5px; font-weight: bold;">Processing Time: {result.get('processing_time', 0)}s</div>
                     </div>
                 </div>
                 
@@ -2017,23 +2017,23 @@ def render_advanced_analysis(result: dict) -> str:
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📈 StockX Bid</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #4CAF50;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_bid', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_bid', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📊 StockX Ask</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #FF9800;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🎯 GOAT Absolute Lowest</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #2196F3;">${calculations.get('step_5_alias_comparison', {}).get('goat_absolute_lowest', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_5_alias_comparison', {}).get('goat_absolute_lowest', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📦 GOAT Consignment</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #9C27B0;">${calculations.get('step_5_alias_comparison', {}).get('goat_consignment', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_5_alias_comparison', {}).get('goat_consignment', 'N/A')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🚚 GOAT Ship to Verify</h4>
-                            <div style="font-size: 2em; font-weight: bold; color: #607D8B;">${calculations.get('step_5_alias_comparison', {}).get('goat_ship_to_verify', 'N/A')}</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_5_alias_comparison', {}).get('goat_ship_to_verify', 'N/A')}</div>
                         </div>
                     </div>
                 </div>
@@ -2043,27 +2043,27 @@ def render_advanced_analysis(result: dict) -> str:
                     <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">📊 SALES VOLUME INFORMATION</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px;">
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Week</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Week</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_week', 0), 'week')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📆 Sales Last Month</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📆 Sales Last Month</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_month', 0), 'month')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📊 Sales Last 3 Months</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📊 Sales Last 3 Months</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_3months', 0), '3 months')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📈 Sales Last 6 Months</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📈 Sales Last 6 Months</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_6months', 0), '6 months')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Year</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📅 Sales Last Year</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{format_sales_display(raw_data.get('alias', {}).get('sales_volume', {}).get('sales_per_year', 0), 'year')}</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
-                            <h4 style="color: #f39c12; margin: 0 0 10px 0; font-size: 1.2em;">📋 Total Sales</h4>
+                            <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 1.2em;">📋 Total Sales</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('total_sales', 'N/A')}</div>
                         </div>
                     </div>
