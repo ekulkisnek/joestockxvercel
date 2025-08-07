@@ -1,0 +1,306 @@
+{
+  "query": "yeezy 350 moonrock",
+  "size": "10",
+  "timestamp": "2025-08-07T12:52:09.347063",
+  "processing_time": 3.6,
+  "success": false,
+  "errors": [
+    "'<' not supported between instances of 'NoneType' and 'float'"
+  ],
+  "warnings": [],
+  "sku_mismatch_warning": null,
+  "calculations": {},
+  "final_recommendation": {},
+  "raw_data": {
+    "stockx": {
+      "bid": "$426",
+      "ask": "$1915",
+      "product_name": "adidas Yeezy Boost 350 Moonrock",
+      "sku": "AQ2660",
+      "url": "https://stockx.com/adidas-yeezy-boost-350-moonrock"
+    },
+    "alias": {
+      "pricing": {
+        "ship_to_verify_price": 1610.0,
+        "consignment_price": null,
+        "lowest_with_you": 1610.0,
+        "lowest_consigned": null,
+        "last_with_you_price": 400.0,
+        "last_with_you_date": "2025-05-05T06:34:21.297Z",
+        "last_consigned_price": 1297.0,
+        "last_consigned_date": "2022-07-23T18:47:38.990Z",
+        "alias_sku": "AQ2660"
+      },
+      "sales_volume": {
+        "sales_per_week": 0,
+        "sales_per_month": 0,
+        "sales_per_3months": 0,
+        "sales_per_6months": 1,
+        "sales_per_year": 2,
+        "total_sales": 123,
+        "sales_this_week": 0,
+        "sales_this_month": 0,
+        "sales_this_3months": 0,
+        "sales_this_6months": 1,
+        "sales_this_year": 2,
+        "last_5_sales": [
+          {
+            "date": "2025-05-05T06:34:21.297000+00:00",
+            "price": 400.0,
+            "price_cents": "40000"
+          },
+          {
+            "date": "2025-01-29T22:59:01.702000+00:00",
+            "price": 740.0,
+            "price_cents": "74000"
+          },
+          {
+            "date": "2024-06-12T16:36:41.974000+00:00",
+            "price": 950.0,
+            "price_cents": "95000"
+          },
+          {
+            "date": "2024-04-19T21:29:26.536000+00:00",
+            "price": 1100.0,
+            "price_cents": "110000"
+          },
+          {
+            "date": "2023-10-05T09:26:23.166000+00:00",
+            "price": 1164.0,
+            "price_cents": "116400"
+          }
+        ],
+        "period_days": 3453,
+        "earliest_sale": "2015-11-20T23:48:56+00:00",
+        "latest_sale": "2025-05-05T06:34:21.297000+00:00"
+      },
+      "catalog_match": {
+        "catalog_id": "yeezy-boost-350-aq2660",
+        "name": "Yeezy Boost 350 'Moonrock'",
+        "sku": "AQ2660",
+        "brand": "adidas",
+        "gender": "men",
+        "release_date": "2015-11-14T23:59:59.999Z",
+        "product_category": "PRODUCT_CATEGORY_SHOES",
+        "product_type": "sneakers",
+        "size_unit": "SIZE_UNIT_US",
+        "allowed_sizes": [
+          {
+            "display_name": "3",
+            "value": 3,
+            "us_size_equivalent": 3
+          },
+          {
+            "display_name": "3.5",
+            "value": 3.5,
+            "us_size_equivalent": 3.5
+          },
+          {
+            "display_name": "4",
+            "value": 4,
+            "us_size_equivalent": 4
+          },
+          {
+            "display_name": "4.5",
+            "value": 4.5,
+            "us_size_equivalent": 4.5
+          },
+          {
+            "display_name": "5",
+            "value": 5,
+            "us_size_equivalent": 5
+          },
+          {
+            "display_name": "5.5",
+            "value": 5.5,
+            "us_size_equivalent": 5.5
+          },
+          {
+            "display_name": "6",
+            "value": 6,
+            "us_size_equivalent": 6
+          },
+          {
+            "display_name": "6.5",
+            "value": 6.5,
+            "us_size_equivalent": 6.5
+          },
+          {
+            "display_name": "7",
+            "value": 7,
+            "us_size_equivalent": 7
+          },
+          {
+            "display_name": "7.5",
+            "value": 7.5,
+            "us_size_equivalent": 7.5
+          },
+          {
+            "display_name": "8",
+            "value": 8,
+            "us_size_equivalent": 8
+          },
+          {
+            "display_name": "8.5",
+            "value": 8.5,
+            "us_size_equivalent": 8.5
+          },
+          {
+            "display_name": "9",
+            "value": 9,
+            "us_size_equivalent": 9
+          },
+          {
+            "display_name": "9.5",
+            "value": 9.5,
+            "us_size_equivalent": 9.5
+          },
+          {
+            "display_name": "10",
+            "value": 10,
+            "us_size_equivalent": 10
+          },
+          {
+            "display_name": "10.5",
+            "value": 10.5,
+            "us_size_equivalent": 10.5
+          },
+          {
+            "display_name": "11",
+            "value": 11,
+            "us_size_equivalent": 11
+          },
+          {
+            "display_name": "11.5",
+            "value": 11.5,
+            "us_size_equivalent": 11.5
+          },
+          {
+            "display_name": "12",
+            "value": 12,
+            "us_size_equivalent": 12
+          },
+          {
+            "display_name": "12.5",
+            "value": 12.5,
+            "us_size_equivalent": 12.5
+          },
+          {
+            "display_name": "13",
+            "value": 13,
+            "us_size_equivalent": 13
+          },
+          {
+            "display_name": "13.5",
+            "value": 13.5,
+            "us_size_equivalent": 13.5
+          },
+          {
+            "display_name": "14",
+            "value": 14,
+            "us_size_equivalent": 14
+          },
+          {
+            "display_name": "14.5",
+            "value": 14.5,
+            "us_size_equivalent": 14.5
+          },
+          {
+            "display_name": "15",
+            "value": 15,
+            "us_size_equivalent": 15
+          },
+          {
+            "display_name": "15.5",
+            "value": 15.5,
+            "us_size_equivalent": 15.5
+          },
+          {
+            "display_name": "16",
+            "value": 16,
+            "us_size_equivalent": 16
+          },
+          {
+            "display_name": "17",
+            "value": 17,
+            "us_size_equivalent": 17
+          },
+          {
+            "display_name": "18",
+            "value": 18,
+            "us_size_equivalent": 18
+          },
+          {
+            "display_name": "19",
+            "value": 19,
+            "us_size_equivalent": 19
+          },
+          {
+            "display_name": "20",
+            "value": 20,
+            "us_size_equivalent": 20
+          }
+        ],
+        "minimum_listing_price_cents": "2500",
+        "maximum_listing_price_cents": "300000",
+        "main_picture_url": "https://image.goat.com/glow-4-5-25/750/attachments/product_template_pictures/images/077/930/377/original/33561_00.png.png",
+        "retail_price_cents": "20000",
+        "colorway": "Agate Gray/Moonrock/Agate Gray",
+        "nickname": "Moonrock",
+        "requires_listing_pictures": true,
+        "requested_pictures": [
+          {
+            "type": "PICTURE_TYPE_OUTER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_INNER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_TOP",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_BACK",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_UNDER",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_SIZE_TAG",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_PACKAGING",
+            "quantity": "1"
+          },
+          {
+            "type": "PICTURE_TYPE_EXTRA",
+            "quantity": "3"
+          }
+        ]
+      }
+    }
+  },
+  "search_metadata": {
+    "stockx": {
+      "search_query": "yeezy 350 moonrock",
+      "search_size": "10",
+      "success": true
+    },
+    "alias": {
+      "search_query": "yeezy 350 moonrock",
+      "search_size": "10",
+      "success": true
+    }
+  },
+  "alternatives": {
+    "stockx_alternatives": [],
+    "alias_alternatives": [],
+    "search_query": "yeezy 350 moonrock",
+    "size": "10"
+  }
+}

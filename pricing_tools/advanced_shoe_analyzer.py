@@ -607,13 +607,14 @@ class AdvancedShoeAnalyzer:
         
         # Step 5: Alias/GOAT Comparison
         alias_pricing = alias_data.get('pricing', {})
-        goat_absolute_lowest = min(
-            alias_pricing.get('ship_to_verify_price', float('inf')),
-            alias_pricing.get('consignment_price', float('inf'))
-        ) if alias_pricing else None
         
-        if goat_absolute_lowest == float('inf'):
-            goat_absolute_lowest = None
+        # Get prices, handling None values properly
+        ship_price = alias_pricing.get('ship_to_verify_price')
+        consignment_price = alias_pricing.get('consignment_price')
+        
+        # Filter out None values and find the minimum
+        valid_prices = [p for p in [ship_price, consignment_price] if p is not None and p > 0]
+        goat_absolute_lowest = min(valid_prices) if valid_prices else None
         
         calculations['step_5_alias_comparison'] = {
             'goat_ship_to_verify': alias_pricing.get('ship_to_verify_price'),
@@ -639,7 +640,7 @@ class AdvancedShoeAnalyzer:
             final_price = ask_minus_20
             decision_reason = f"High volume ({weekly_sales} sales last week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}"
             calculation_breakdown = f"${original_ask} × 0.8 = ${ask_minus_20:.1f}"
-        elif stockx_bid_float and goat_absolute_lowest:
+        elif stockx_bid_float and goat_absolute_lowest and goat_absolute_lowest > 0:
             # Low volume: New logic - use 15% less than GOAT absolute lowest
             goat_lowest = goat_absolute_lowest
             bid_price = stockx_bid_float

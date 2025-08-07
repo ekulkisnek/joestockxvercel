@@ -2531,9 +2531,12 @@ def calculate_profit_analysis(result: dict) -> dict:
     stockx_ask = calculations.get('step_1_stockx_analysis', {}).get('stockx_ask', 0)
     
     # Get GOAT absolute lowest price
-    ship_price = pricing.get('ship_to_verify_price', 0)
-    consignment_price = pricing.get('consignment_price', 0)
-    goat_lowest_price = min(ship_price, consignment_price) if ship_price and consignment_price else (ship_price or consignment_price or 0)
+    ship_price = pricing.get('ship_to_verify_price')
+    consignment_price = pricing.get('consignment_price')
+    
+    # Filter out None values and find the minimum
+    valid_prices = [p for p in [ship_price, consignment_price] if p is not None and p > 0]
+    goat_lowest_price = min(valid_prices) if valid_prices else 0
     
     # GOAT fees (approximately 9.5% + $5)
     goat_fees = (goat_lowest_price * 0.095) + 5 if goat_lowest_price > 0 else 0
