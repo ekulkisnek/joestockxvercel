@@ -1841,6 +1841,9 @@ def render_advanced_analysis(result: dict) -> str:
     recommendation = result.get('final_recommendation', {})
     raw_data = result.get('raw_data', {})
     
+    # Calculate profit analysis
+    profit_data = calculate_profit_analysis(result)
+    
     # Build comprehensive HTML response with detailed calculations
     return f"""
     <!DOCTYPE html>
@@ -1991,7 +1994,7 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                 </div>
                 
-                <p>Analysis completed at {datetime.fromisoformat(result.get('timestamp', '')).strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p>Analysis completed at {datetime.fromisoformat(result.get('timestamp', '')).strftime('%Y-%m-%d %H:%M:%S')} | Processing Time: {result.get('processing_time', 0)}s | {get_confidence_emoji(recommendation.get('confidence', 'Unknown'))} Confidence: {recommendation.get('confidence', 'Unknown')}</p>
             </div>
             
             <div class="content">
@@ -2004,10 +2007,10 @@ def render_advanced_analysis(result: dict) -> str:
                     
                     <div style="margin-top: 20px;">
                         <div class="metric" style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
-                            <strong>🎯 Confidence Analysis:</strong><br>
-                            {get_confidence_explanation(recommendation.get('confidence', 'Unknown'), result)}
+                            <strong>💰 Profit Analysis:</strong><br>
+                            ${profit_data['final_profit']:.2f} profit receiving (${profit_data['goat_lowest_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}
                         </div>
-                        <div class="metric" style="background: #f8f9fa; color: #495057; padding: 10px 15px; border-radius: 8px; margin: 5px; font-weight: bold;">Processing Time: {result.get('processing_time', 0)}s</div>
+                        {get_confidence_warning_section(recommendation.get('confidence', 'Unknown'), result) if 'low' in recommendation.get('confidence', '').lower() else ''}
                     </div>
                 </div>
                 
@@ -2034,6 +2037,10 @@ def render_advanced_analysis(result: dict) -> str:
                         <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
                             <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">🚚 GOAT Ship to Verify</h4>
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">${calculations.get('step_5_alias_comparison', {}).get('goat_ship_to_verify', 'N/A')}</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; text-align: center;">
+                            <h4 style="color: #ffd700; margin: 0 0 10px 0; font-size: 1.2em;">📊 GOAT Last Sale</h4>
+                            <div style="font-size: 1.5em; font-weight: bold; color: #ffffff;">{get_goat_last_sale_info(result)}</div>
                         </div>
                     </div>
                 </div>
@@ -2389,6 +2396,111 @@ def get_confidence_explanation(confidence: str, result: dict) -> str:
             return "Low confidence: Limited data available from one or both platforms"
     else:
         return f"Confidence: {confidence}"
+
+def get_confidence_emoji(confidence: str) -> str:
+    """Get warning emoji based on confidence level"""
+    confidence_lower = confidence.lower()
+    
+    if 'high' in confidence_lower:
+        return "✅"
+    elif 'medium' in confidence_lower:
+        return "⚠️"
+    elif 'low' in confidence_lower:
+        return "🚨"
+    else:
+        return "❓"
+
+def calculate_profit_analysis(result: dict) -> dict:
+    """Calculate profit analysis based on GOAT pricing"""
+    alias_data = result.get('raw_data', {}).get('alias', {})
+    pricing = alias_data.get('pricing', {})
+    
+    # Get GOAT absolute lowest price
+    ship_price = pricing.get('ship_to_verify_price', 0)
+    consignment_price = pricing.get('consignment_price', 0)
+    goat_lowest_price = min(ship_price, consignment_price) if ship_price and consignment_price else (ship_price or consignment_price or 0)
+    
+    # GOAT fees (approximately 9.5% + $5)
+    goat_fees = (goat_lowest_price * 0.095) + 5 if goat_lowest_price > 0 else 0
+    
+    # Calculate profit (selling for $1 less than GOAT lowest)
+    selling_price = goat_lowest_price - 1
+    final_profit = selling_price - goat_fees if selling_price > goat_fees else 0
+    
+    return {
+        'goat_lowest_price': goat_lowest_price,
+        'goat_fees': goat_fees,
+        'selling_price': selling_price,
+        'final_profit': final_profit
+    }
+
+def get_goat_last_sale_info(result: dict) -> str:
+    """Get GOAT last sale information"""
+    alias_data = result.get('raw_data', {}).get('alias', {})
+    pricing = alias_data.get('pricing', {})
+    
+    # Get last sale dates and prices
+    last_with_you_date = pricing.get('last_with_you_date')
+    last_consigned_date = pricing.get('last_consigned_date')
+    last_with_you_price = pricing.get('last_with_you_price', 0)
+    last_consigned_price = pricing.get('last_consigned_price', 0)
+    
+    if not last_with_you_date and not last_consigned_date:
+        return "No recent sales data"
+    
+    # Determine which sale is more recent
+    from datetime import datetime, timezone
+    
+    try:
+        if last_with_you_date and last_consigned_date:
+            with_you_dt = datetime.fromisoformat(last_with_you_date.replace('Z', '+00:00'))
+            consigned_dt = datetime.fromisoformat(last_consigned_date.replace('Z', '+00:00'))
+            
+            if with_you_dt > consigned_dt:
+                # With you sale is more recent
+                days_ago = (datetime.now(timezone.utc) - with_you_dt).days
+                return f"${last_with_you_price:.2f} ({days_ago} days ago)"
+            else:
+                # Consigned sale is more recent
+                days_ago = (datetime.now(timezone.utc) - consigned_dt).days
+                return f"${last_consigned_price:.2f} ({days_ago} days ago)"
+        elif last_with_you_date:
+            with_you_dt = datetime.fromisoformat(last_with_you_date.replace('Z', '+00:00'))
+            days_ago = (datetime.now(timezone.utc) - with_you_dt).days
+            return f"${last_with_you_price:.2f} ({days_ago} days ago)"
+        elif last_consigned_date:
+            consigned_dt = datetime.fromisoformat(last_consigned_date.replace('Z', '+00:00'))
+            days_ago = (datetime.now(timezone.utc) - consigned_dt).days
+            return f"${last_consigned_price:.2f} ({days_ago} days ago)"
+    except Exception:
+        return "Date parsing error"
+    
+    return "No recent sales data"
+
+def get_confidence_warning_section(confidence: str, result: dict) -> str:
+    """Get confidence warning section with initial Alias match info"""
+    if 'low' not in confidence.lower():
+        return ""
+    
+    stockx_data = result.get('raw_data', {}).get('stockx', {})
+    alias_data = result.get('raw_data', {}).get('alias', {})
+    
+    # Check if it's a SKU mismatch
+    if stockx_data.get('sku') != alias_data.get('catalog_match', {}).get('sku'):
+        stockx_name = stockx_data.get('product_name', 'Unknown')
+        alias_name = alias_data.get('catalog_match', {}).get('name', 'Unknown')
+        stockx_sku = stockx_data.get('sku', 'Unknown')
+        alias_sku = alias_data.get('catalog_match', {}).get('sku', 'Unknown')
+        
+        return f"""
+                        <div class="metric" style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
+                            <strong>🚨 SKU Mismatch Warning:</strong><br>
+                            StockX found: {stockx_name} (SKU: {stockx_sku})<br>
+                            Alias initially found: {alias_name} (SKU: {alias_sku})
+                        </div>
+        """
+    
+    return ""
 
 def build_calculation_step_html(step_title: str, step_data: dict) -> str:
     """Build HTML for a calculation step"""
