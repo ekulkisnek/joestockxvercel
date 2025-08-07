@@ -696,13 +696,24 @@ class AdvancedShoeAnalyzer:
     def _calculate_confidence(self, calculations: Dict) -> str:
         """Calculate confidence level based on data quality"""
         has_stockx = calculations.get('step_1_stockx_analysis', {}).get('stockx_bid') is not None
-        has_alias = calculations.get('step_5_alias_comparison', {}).get('goat_ask_used') is not None
+        has_alias = calculations.get('step_5_alias_comparison', {}).get('goat_absolute_lowest') is not None
         has_volume = calculations.get('step_2_volume_check', {}).get('weekly_sales', 0) > 0
         
-        if has_stockx and has_alias and has_volume:
+        # Check SKU matching (normalized)
+        stockx_sku = calculations.get('step_1_stockx_analysis', {}).get('stockx_sku', '')
+        alias_sku = calculations.get('step_5_alias_comparison', {}).get('alias_sku', '')
+        
+        # Normalize SKUs for comparison
+        stockx_sku_normalized = stockx_sku.replace('-', '').replace(' ', '') if stockx_sku else ''
+        alias_sku_normalized = alias_sku.replace('-', '').replace(' ', '') if alias_sku else ''
+        skus_match = stockx_sku_normalized == alias_sku_normalized and stockx_sku_normalized != ''
+        
+        if has_stockx and has_alias and has_volume and skus_match:
             return "HIGH"
-        elif has_stockx and has_alias:
+        elif has_stockx and has_alias and skus_match:
             return "MEDIUM"
+        elif has_stockx and has_alias:
+            return "MEDIUM"  # SKUs don't match but we have both platforms
         elif has_stockx:
             return "LOW"
         else:

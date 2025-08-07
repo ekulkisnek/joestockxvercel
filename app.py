@@ -2008,8 +2008,8 @@ def render_advanced_analysis(result: dict) -> str:
                     <div style="margin-top: 20px;">
                         <div class="metric" style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
                             <strong>💰 Profit Analysis:</strong><br>
-                            <strong>Absolute Lowest:</strong> ${profit_data['final_profit']:.2f} profit receiving (${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}<br>
-                            <strong>Consignment:</strong> ${profit_data['consignment_profit']:.2f} profit receiving (${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} fees) after fees if sold for ${profit_data['consignment_selling_price']:.2f}
+                            <strong>Absolute Lowest:</strong> ${profit_data['actual_profit']:.2f} profit receiving ${profit_data['after_fees_amount']:.2f} (${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}<br>
+                            <strong>Consignment:</strong> ${profit_data['consignment_actual_profit']:.2f} profit receiving ${profit_data['consignment_after_fees']:.2f} (${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} fees) after fees if sold for ${profit_data['consignment_selling_price']:.2f}
                         </div>
                         {get_confidence_warning_section(recommendation.get('confidence', 'Unknown'), result) if 'low' in recommendation.get('confidence', '').lower() else ''}
                     </div>
@@ -2415,6 +2415,10 @@ def calculate_profit_analysis(result: dict) -> dict:
     """Calculate profit analysis based on GOAT pricing"""
     alias_data = result.get('raw_data', {}).get('alias', {})
     pricing = alias_data.get('pricing', {})
+    calculations = result.get('calculations', {})
+    
+    # Get the buy price from the final recommendation
+    buy_price = calculations.get('step_6_final_decision', {}).get('final_price', 0)
     
     # Get GOAT absolute lowest price
     ship_price = pricing.get('ship_to_verify_price', 0)
@@ -2426,22 +2430,27 @@ def calculate_profit_analysis(result: dict) -> dict:
     
     # Calculate profit (selling for $1 less than GOAT lowest)
     selling_price = goat_lowest_price - 1
-    final_profit = selling_price - goat_fees if selling_price > goat_fees else 0
+    after_fees_amount = selling_price - goat_fees if selling_price > goat_fees else 0
+    actual_profit = after_fees_amount - buy_price if after_fees_amount > buy_price else 0
     
     # Calculate consignment profit (selling for $1 less than consignment price)
     consignment_selling_price = consignment_price - 1 if consignment_price > 0 else 0
     consignment_fees = (consignment_selling_price * 0.095) + 5 if consignment_selling_price > 0 else 0
-    consignment_profit = consignment_selling_price - consignment_fees if consignment_selling_price > consignment_fees else 0
+    consignment_after_fees = consignment_selling_price - consignment_fees if consignment_selling_price > consignment_fees else 0
+    consignment_actual_profit = consignment_after_fees - buy_price if consignment_after_fees > buy_price else 0
     
     return {
+        'buy_price': buy_price,
         'goat_lowest_price': goat_lowest_price,
         'goat_fees': goat_fees,
         'selling_price': selling_price,
-        'final_profit': final_profit,
+        'after_fees_amount': after_fees_amount,
+        'actual_profit': actual_profit,
         'consignment_price': consignment_price,
         'consignment_selling_price': consignment_selling_price,
         'consignment_fees': consignment_fees,
-        'consignment_profit': consignment_profit
+        'consignment_after_fees': consignment_after_fees,
+        'consignment_actual_profit': consignment_actual_profit
     }
 
 def get_goat_last_sale_info(result: dict) -> str:
@@ -2514,8 +2523,15 @@ def get_confidence_warning_section(confidence: str, result: dict) -> str:
                             Alias initially found: {alias_name} (SKU: {alias_sku})
                         </div>
         """
-    
-    return ""
+    else:
+        # SKUs match after normalization, so confidence should be higher
+        return f"""
+                        <div class="metric" style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
+                            <strong>✅ SKU Match Confirmed:</strong><br>
+                            StockX and Alias SKUs match after normalization<br>
+                            StockX: {stockx_sku} → Alias: {alias_sku}
+                        </div>
+        """
 
 def build_calculation_step_html(step_title: str, step_data: dict) -> str:
     """Build HTML for a calculation step"""
