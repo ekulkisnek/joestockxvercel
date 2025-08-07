@@ -2076,6 +2076,14 @@ def render_advanced_analysis(result: dict) -> str:
                             <div style="font-size: 2em; font-weight: bold; color: #ffffff;">{raw_data.get('alias', {}).get('sales_volume', {}).get('total_sales', 'N/A')}</div>
                         </div>
                     </div>
+                    
+                    <!-- Last 5 Sales Section -->
+                    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-top: 20px;">
+                        <h4 style="color: #ffd700; margin: 0 0 15px 0; font-size: 1.3em; text-align: center;">📈 Last 5 Sales</h4>
+                        <div style="color: #ffffff; font-size: 1.1em; line-height: 1.6; text-align: left;">
+                            {get_last_5_sales_display(result)}
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Verification Information -->
@@ -2516,6 +2524,47 @@ def get_goat_last_sale_info(result: dict) -> str:
         return "Date parsing error"
     
     return "No recent sales data"
+
+def get_last_5_sales_display(result: dict) -> str:
+    """Get formatted display of last 5 sales"""
+    alias_data = result.get('raw_data', {}).get('alias', {})
+    sales_volume = alias_data.get('sales_volume', {})
+    last_5_sales = sales_volume.get('last_5_sales', [])
+    
+    if not last_5_sales:
+        return "No recent sales data available"
+    
+    from datetime import datetime, timezone
+    
+    sales_display = []
+    for i, sale in enumerate(last_5_sales[:5], 1):
+        try:
+            sale_date = sale.get('date')
+            sale_price = sale.get('price', 0)
+            
+            if sale_date:
+                # Parse the date
+                sale_dt = datetime.fromisoformat(sale_date.replace('Z', '+00:00'))
+                days_ago = (datetime.now(timezone.utc) - sale_dt).days
+                
+                # Format the sale info
+                if days_ago == 0:
+                    time_ago = "Today"
+                elif days_ago == 1:
+                    time_ago = "1 day ago"
+                else:
+                    time_ago = f"{days_ago} days ago"
+                
+                sales_display.append(f"<strong>#{i}:</strong> ${sale_price:.2f} ({time_ago})")
+            else:
+                sales_display.append(f"<strong>#{i}:</strong> ${sale_price:.2f} (date unknown)")
+        except Exception:
+            sales_display.append(f"<strong>#{i}:</strong> ${sale.get('price', 0):.2f} (date error)")
+    
+    if not sales_display:
+        return "No recent sales data available"
+    
+    return "<br>".join(sales_display)
 
 def get_confidence_warning_section(confidence: str, result: dict) -> str:
     """Get confidence warning section with initial Alias match info"""
