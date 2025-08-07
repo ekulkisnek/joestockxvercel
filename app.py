@@ -1966,6 +1966,31 @@ def render_advanced_analysis(result: dict) -> str:
             <div class="header">
                 <h1>🎯 Advanced Shoe Analysis</h1>
                 <h2>{query} - Size {size}</h2>
+                
+                <!-- Platform Names Section -->
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div style="text-align: center;">
+                            <h3 style="color: #ffd700; margin: 0 0 10px 0;">📈 StockX Found:</h3>
+                            <div style="font-size: 1.1em; font-weight: bold; color: #4CAF50;">
+                                {raw_data.get('stockx', {}).get('product_name', 'Not found')}
+                            </div>
+                            <div style="font-size: 0.9em; opacity: 0.8; margin-top: 5px;">
+                                SKU: {raw_data.get('stockx', {}).get('sku', 'N/A')}
+                            </div>
+                        </div>
+                        <div style="text-align: center;">
+                            <h3 style="color: #ffd700; margin: 0 0 10px 0;">🎯 Alias/GOAT Found:</h3>
+                            <div style="font-size: 1.1em; font-weight: bold; color: #2196F3;">
+                                {raw_data.get('alias', {}).get('catalog_match', {}).get('name', 'Not found')}
+                            </div>
+                            <div style="font-size: 0.9em; opacity: 0.8; margin-top: 5px;">
+                                SKU: {raw_data.get('alias', {}).get('catalog_match', {}).get('sku', 'N/A')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <p>Analysis completed at {datetime.fromisoformat(result.get('timestamp', '')).strftime('%Y-%m-%d %H:%M:%S')}</p>
             </div>
             
@@ -1978,7 +2003,10 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                     
                     <div style="margin-top: 20px;">
-                        <div class="metric">Confidence: {recommendation.get('confidence', 'Unknown')}</div>
+                        <div class="metric" style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
+                            <strong>🎯 Confidence Analysis:</strong><br>
+                            {get_confidence_explanation(recommendation.get('confidence', 'Unknown'), result)}
+                        </div>
                         <div class="metric">Processing Time: {result.get('processing_time', 0)}s</div>
                     </div>
                 </div>
@@ -2182,7 +2210,7 @@ def render_advanced_analysis(result: dict) -> str:
                             <h5>🧮 Step 3: Ask Calculation (High Volume)</h5>
                             <p>• <strong>Original Ask:</strong> ${calculations.get('step_3_ask_calculation', {}).get('original_ask', 'N/A')}</p>
                             <p>• <strong>20% Reduction:</strong> ${calculations.get('step_3_ask_calculation', {}).get('ask_minus_20_percent', 'N/A')} (Ask × 0.8)</p>
-                            <p>• <strong>Rounded Price:</strong> ${calculations.get('step_3_ask_calculation', {}).get('rounded_to_tens', 'N/A')} (nearest $10)</p>
+                            <p>• <strong>Final Price:</strong> ${calculations.get('step_3_ask_calculation', {}).get('final_price', 'N/A')}</p>
                             
                             <h5>💎 Step 4: Bid Analysis</h5>
                             <p>• <strong>StockX Bid:</strong> {calculations.get('step_4_bid_analysis', {}).get('stockx_bid', 'N/A')} (current market bid)</p>
@@ -2337,6 +2365,30 @@ def format_sales_display(value: int, period: str) -> str:
         return f"0 last {period.lower()}"
     else:
         return f"{value} last {period.lower()}"
+
+def get_confidence_explanation(confidence: str, result: dict) -> str:
+    """Get detailed explanation for confidence score"""
+    confidence_lower = confidence.lower()
+    
+    if 'high' in confidence_lower:
+        return "High confidence: Both StockX and Alias found exact matches with matching SKUs"
+    elif 'medium' in confidence_lower:
+        return "Medium confidence: Found matches but SKUs don't match exactly"
+    elif 'low' in confidence_lower:
+        # Check for specific reasons
+        stockx_data = result.get('raw_data', {}).get('stockx', {})
+        alias_data = result.get('raw_data', {}).get('alias', {})
+        
+        if not stockx_data.get('product_name'):
+            return "Low confidence: No StockX match found"
+        elif not alias_data.get('catalog_match', {}).get('name'):
+            return "Low confidence: No Alias/GOAT match found"
+        elif stockx_data.get('sku') != alias_data.get('catalog_match', {}).get('sku'):
+            return "Low confidence: StockX and Alias found different SKUs"
+        else:
+            return "Low confidence: Limited data available from one or both platforms"
+    else:
+        return f"Confidence: {confidence}"
 
 def build_calculation_step_html(step_title: str, step_data: dict) -> str:
     """Build HTML for a calculation step"""
@@ -3810,3 +3862,4 @@ if __name__ == '__main__':
             print("💡 Try running with: python app.py --production")
             import sys
             sys.exit(1)
+# Test comment

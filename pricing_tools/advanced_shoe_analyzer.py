@@ -583,8 +583,8 @@ class AdvancedShoeAnalyzer:
                 'original_ask': stockx_ask_float,
                 'ask_minus_20_percent': round(ask_minus_20_percent, 2),
                 'calculation': f"{stockx_ask_float} × 0.8 = {ask_minus_20_percent}",
-                'rounded_to_tens': rounded_ask,
-                'notes': f"High volume: Use 20% less than ask, rounded to nearest $10"
+                'final_price': ask_minus_20_percent,
+                'notes': f"High volume: Use 20% less than ask"
             }
         else:
             calculations['step_3_ask_calculation'] = {
@@ -971,7 +971,7 @@ def main():
         ask_calc = calc.get('step_3_ask_calculation', {})
         if ask_calc.get('applies', True):
             print(f"   Ask - 20%: ${ask_calc.get('ask_minus_20_percent', 'N/A')}")
-            print(f"   Rounded: ${ask_calc.get('rounded_to_tens', 'N/A')}")
+            print(f"   Final Price: ${ask_calc.get('final_price', 'N/A')}")
         
         print(f"\n💎 GOAT COMPARISON:")
         goat = calc.get('step_5_alias_comparison', {})
