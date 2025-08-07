@@ -2035,68 +2035,68 @@ def render_advanced_analysis(result: dict) -> str:
                 </div>
                 
                 <!-- Profit Analysis Section -->
-                <div class="calculation-step" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; border-left: 5px solid #8BC34A;">
-                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">💰 PROFIT ANALYSIS</h3>
+                <div class="calculation-step" style="background: #f8f9fa; border-left: 5px solid #28a745;">
+                    <h3 style="color: #2c3e50; font-size: 1.5em; text-align: center; margin-bottom: 25px;">💰 PROFIT ANALYSIS</h3>
                     
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e9ecef;">
                         <!-- GOAT Lowest Ask Profit -->
-                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
-                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">🎯 Selling for GOAT Lowest Ask</h4>
-                            <div style="text-align: center; margin-bottom: 15px;">
-                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                        <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e9ecef;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 1.3em;">🎯 Selling for GOAT Lowest Ask</h4>
+                            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.5em; font-weight: bold; color: #28a745; margin-right: 20px;">
                                     ${profit_data['actual_profit']:.2f}
                                 </div>
-                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                <div style="font-size: 1.2em; color: #6c757d; font-weight: bold;">
                                     {profit_data['profit_percentage']:.1f}% Return
                                 </div>
                             </div>
-                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
-                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['after_fees_amount']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['selling_price']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>💸 GOAT Fees:</strong> ${profit_data['goat_fees']:.2f}</div>
-                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-size: 1em; line-height: 1.6;">
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💰 Receiving:</strong> <span style="color: #28a745; font-weight: bold;">${profit_data['after_fees_amount']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">📊 Selling Price:</strong> <span style="color: #495057;">${profit_data['selling_price']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💸 GOAT Fees:</strong> <span style="color: #dc3545;">${profit_data['goat_fees']:.2f}</span></div>
+                                <div style="font-size: 0.9em; color: #6c757d; font-style: italic; margin-top: 10px;">
                                     ${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} = ${profit_data['after_fees_amount']:.2f}
                                 </div>
                             </div>
                         </div>
                         
                         <!-- GOAT Consignment Profit -->
-                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
-                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">📦 Selling for GOAT Consignment</h4>
-                            <div style="text-align: center; margin-bottom: 15px;">
-                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                        <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #e9ecef;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 1.3em;">📦 Selling for GOAT Consignment</h4>
+                            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.5em; font-weight: bold; color: #28a745; margin-right: 20px;">
                                     ${profit_data['consignment_actual_profit']:.2f}
                                 </div>
-                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                <div style="font-size: 1.2em; color: #6c757d; font-weight: bold;">
                                     {profit_data['consignment_profit_percentage']:.1f}% Return
                                 </div>
                             </div>
-                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
-                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['consignment_after_fees']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['consignment_selling_price']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>💸 Consignment Fees:</strong> ${profit_data['consignment_fees']:.2f}</div>
-                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-size: 1em; line-height: 1.6;">
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💰 Receiving:</strong> <span style="color: #28a745; font-weight: bold;">${profit_data['consignment_after_fees']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">📊 Selling Price:</strong> <span style="color: #495057;">${profit_data['consignment_selling_price']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💸 Consignment Fees:</strong> <span style="color: #dc3545;">${profit_data['consignment_fees']:.2f}</span></div>
+                                <div style="font-size: 0.9em; color: #6c757d; font-style: italic; margin-top: 10px;">
                                     ${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} = ${profit_data['consignment_after_fees']:.2f}
                                 </div>
                             </div>
                         </div>
                         
                         <!-- StockX Ask Profit -->
-                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
-                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">📈 Selling for StockX Ask</h4>
-                            <div style="text-align: center; margin-bottom: 15px;">
-                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                        <div style="margin-bottom: 20px;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 1.3em;">📈 Selling for StockX Ask</h4>
+                            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.5em; font-weight: bold; color: #28a745; margin-right: 20px;">
                                     ${profit_data['stockx_actual_profit']:.2f}
                                 </div>
-                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                <div style="font-size: 1.2em; color: #6c757d; font-weight: bold;">
                                     {profit_data['stockx_profit_percentage']:.1f}% Return
                                 </div>
                             </div>
-                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
-                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['stockx_after_fees']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['stockx_selling_price']:.2f}</div>
-                                <div style="margin-bottom: 8px;"><strong>💸 StockX Fees:</strong> ${profit_data['stockx_fees']:.2f}</div>
-                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-size: 1em; line-height: 1.6;">
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💰 Receiving:</strong> <span style="color: #28a745; font-weight: bold;">${profit_data['stockx_after_fees']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">📊 Selling Price:</strong> <span style="color: #495057;">${profit_data['stockx_selling_price']:.2f}</span></div>
+                                <div style="margin-bottom: 8px;"><strong style="color: #495057;">💸 StockX Fees:</strong> <span style="color: #dc3545;">${profit_data['stockx_fees']:.2f}</span></div>
+                                <div style="font-size: 0.9em; color: #6c757d; font-style: italic; margin-top: 10px;">
                                     ${profit_data['stockx_selling_price']:.2f} - ${profit_data['stockx_fees']:.2f} = ${profit_data['stockx_after_fees']:.2f}
                                 </div>
                             </div>
@@ -2104,11 +2104,11 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                     
                     <!-- Summary Note -->
-                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
-                        <div style="font-size: 1.1em; color: #FFD700; font-weight: bold; margin-bottom: 5px;">
+                    <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #b3d9ff;">
+                        <div style="font-size: 1.1em; color: #0056b3; font-weight: bold; margin-bottom: 5px;">
                             💡 Profit Calculation Summary
                         </div>
-                        <div style="font-size: 0.95em; opacity: 0.9;">
+                        <div style="font-size: 0.95em; color: #495057;">
                             Actual Profit = Receiving Amount - Buy Price (${calculations.get('step_6_final_decision', {}).get('final_price', 'N/A')})
                         </div>
                     </div>
