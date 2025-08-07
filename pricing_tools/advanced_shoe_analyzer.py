@@ -570,7 +570,7 @@ class AdvancedShoeAnalyzer:
             'weekly_sales': weekly_sales,
             'is_high_volume': is_high_volume,
             'threshold': 3,
-            'notes': f"High volume = 3+ sales per week. Current: {weekly_sales} sales/week"
+            'notes': f"High volume = 3+ sales per week. Current: {weekly_sales} sales last week"
         }
         
         # Step 3: Ask Calculation (for high volume)
@@ -637,7 +637,7 @@ class AdvancedShoeAnalyzer:
             original_ask = stockx_ask_float
             ask_minus_20 = original_ask * 0.8
             final_price = ask_minus_20
-            decision_reason = f"High volume ({weekly_sales} sales/week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}"
+            decision_reason = f"High volume ({weekly_sales} sales last week): StockX Ask (${original_ask}) - 20% = ${ask_minus_20:.1f}"
             calculation_breakdown = f"${original_ask} × 0.8 = ${ask_minus_20:.1f}"
         elif stockx_bid_float and goat_absolute_lowest:
             # Low volume: New logic - use 15% less than GOAT absolute lowest
@@ -649,7 +649,7 @@ class AdvancedShoeAnalyzer:
             fair_price = goat_lowest * 0.85
             
             final_price = fair_price
-            decision_reason = f"Low volume ({weekly_sales} sales/week): StockX Bid (${bid_price}) is {percent_diff:+.1f}% vs GOAT/Alias absolute lowest (${goat_lowest})"
+            decision_reason = f"Low volume ({weekly_sales} sales last week): StockX Bid (${bid_price}) is {percent_diff:+.1f}% vs GOAT/Alias absolute lowest (${goat_lowest})"
             calculation_breakdown = f"${goat_lowest} × 0.85 = ${fair_price:.1f}"
         elif stockx_bid_float:
             # Only StockX bid available - use 10% less than bid
@@ -657,12 +657,12 @@ class AdvancedShoeAnalyzer:
             fair_price = bid_price * 0.9
             
             final_price = fair_price
-            decision_reason = f"Low volume ({weekly_sales} sales/week): Only StockX bid available (${bid_price})"
+            decision_reason = f"Low volume ({weekly_sales} sales last week): Only StockX bid available (${bid_price})"
             calculation_breakdown = f"${bid_price} × 0.9 = ${fair_price:.1f}"
         else:
             # No pricing data available
             final_price = None
-            decision_reason = f"Low volume ({weekly_sales} sales/week): No pricing data available - check alternative options"
+            decision_reason = f"Low volume ({weekly_sales} sales last week): No pricing data available - check alternative options"
             calculation_breakdown = "No data available"
         
         calculations['step_6_final_decision'] = {

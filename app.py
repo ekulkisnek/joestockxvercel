@@ -2008,7 +2008,8 @@ def render_advanced_analysis(result: dict) -> str:
                     <div style="margin-top: 20px;">
                         <div class="metric" style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
                             <strong>💰 Profit Analysis:</strong><br>
-                            ${profit_data['final_profit']:.2f} profit receiving (${profit_data['goat_lowest_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}
+                            <strong>Absolute Lowest:</strong> ${profit_data['final_profit']:.2f} profit receiving (${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}<br>
+                            <strong>Consignment:</strong> ${profit_data['consignment_profit']:.2f} profit receiving (${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} fees) after fees if sold for ${profit_data['consignment_selling_price']:.2f}
                         </div>
                         {get_confidence_warning_section(recommendation.get('confidence', 'Unknown'), result) if 'low' in recommendation.get('confidence', '').lower() else ''}
                     </div>
@@ -2427,11 +2428,20 @@ def calculate_profit_analysis(result: dict) -> dict:
     selling_price = goat_lowest_price - 1
     final_profit = selling_price - goat_fees if selling_price > goat_fees else 0
     
+    # Calculate consignment profit (selling for $1 less than consignment price)
+    consignment_selling_price = consignment_price - 1 if consignment_price > 0 else 0
+    consignment_fees = (consignment_selling_price * 0.095) + 5 if consignment_selling_price > 0 else 0
+    consignment_profit = consignment_selling_price - consignment_fees if consignment_selling_price > consignment_fees else 0
+    
     return {
         'goat_lowest_price': goat_lowest_price,
         'goat_fees': goat_fees,
         'selling_price': selling_price,
-        'final_profit': final_profit
+        'final_profit': final_profit,
+        'consignment_price': consignment_price,
+        'consignment_selling_price': consignment_selling_price,
+        'consignment_fees': consignment_fees,
+        'consignment_profit': consignment_profit
     }
 
 def get_goat_last_sale_info(result: dict) -> str:
@@ -2485,12 +2495,17 @@ def get_confidence_warning_section(confidence: str, result: dict) -> str:
     stockx_data = result.get('raw_data', {}).get('stockx', {})
     alias_data = result.get('raw_data', {}).get('alias', {})
     
-    # Check if it's a SKU mismatch
-    if stockx_data.get('sku') != alias_data.get('catalog_match', {}).get('sku'):
+    # Normalize SKUs for comparison (remove spaces and dashes)
+    stockx_sku = stockx_data.get('sku', 'Unknown')
+    alias_sku = alias_data.get('catalog_match', {}).get('sku', 'Unknown')
+    
+    stockx_sku_normalized = stockx_sku.replace('-', '').replace(' ', '') if stockx_sku else ''
+    alias_sku_normalized = alias_sku.replace('-', '').replace(' ', '') if alias_sku else ''
+    
+    # Check if it's a SKU mismatch (after normalization)
+    if stockx_sku_normalized != alias_sku_normalized:
         stockx_name = stockx_data.get('product_name', 'Unknown')
         alias_name = alias_data.get('catalog_match', {}).get('name', 'Unknown')
-        stockx_sku = stockx_data.get('sku', 'Unknown')
-        alias_sku = alias_data.get('catalog_match', {}).get('sku', 'Unknown')
         
         return f"""
                         <div class="metric" style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
