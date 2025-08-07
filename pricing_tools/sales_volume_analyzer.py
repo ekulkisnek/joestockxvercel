@@ -311,11 +311,11 @@ class SalesVolumeAnalyzer:
 
                     # Track time period
                     if size_metrics['earliest_sale']:
-                        if not overall_stats['earliest_sale'] or size_metrics['earliest_sale'] < overall_stats['earliest_sale']:
+                        if not overall_stats['earliest_sale'] or (size_metrics['earliest_sale'] and overall_stats['earliest_sale'] and size_metrics['earliest_sale'] < overall_stats['earliest_sale']):
                             overall_stats['earliest_sale'] = size_metrics['earliest_sale']
 
                     if size_metrics['latest_sale']:
-                        if not overall_stats['latest_sale'] or size_metrics['latest_sale'] > overall_stats['latest_sale']:
+                        if not overall_stats['latest_sale'] or (size_metrics['latest_sale'] and overall_stats['latest_sale'] and size_metrics['latest_sale'] > overall_stats['latest_sale']):
                             overall_stats['latest_sale'] = size_metrics['latest_sale']
                 else:
                     size_results[size] = self._empty_size_metrics()
