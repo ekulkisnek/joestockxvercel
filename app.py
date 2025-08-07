@@ -1889,22 +1889,40 @@ def render_advanced_analysis(result: dict) -> str:
             .recommendation-section {{ 
                 background: linear-gradient(135deg, #27ae60, #2ecc71);
                 color: white;
-                padding: 25px;
+                padding: 30px;
                 margin: 20px 0;
-                border-radius: 12px;
+                border-radius: 15px;
                 text-align: center;
+                box-shadow: 0 8px 25px rgba(39, 174, 96, 0.3);
+                border: 2px solid rgba(255,255,255,0.2);
             }}
             
             .recommendation {{ 
-                font-size: 2em; 
+                font-size: 2.2em; 
                 font-weight: bold; 
-                padding: 20px; 
-                border-radius: 10px;
-                margin: 20px 0;
+                padding: 25px; 
+                border-radius: 12px;
+                margin: 25px 0;
                 text-align: center;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                border: 3px solid rgba(255,255,255,0.3);
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
             }}
-            .rec-buy {{ background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; }}
-            .rec-no-buy {{ background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }}
+            .rec-buy {{ 
+                background: linear-gradient(135deg, #27ae60, #2ecc71); 
+                color: white;
+                animation: pulse 2s infinite;
+            }}
+            .rec-no-buy {{ 
+                background: linear-gradient(135deg, #e74c3c, #c0392b); 
+                color: white;
+            }}
+            
+            @keyframes pulse {{
+                0% {{ transform: scale(1); }}
+                50% {{ transform: scale(1.02); }}
+                100% {{ transform: scale(1); }}
+            }}
             
             .calculation-step {{ 
                 margin: 30px 0; 
@@ -2013,14 +2031,86 @@ def render_advanced_analysis(result: dict) -> str:
                         {recommendation.get('recommendation', 'No recommendation available')}
                     </div>
                     
-                    <div style="margin-top: 20px;">
-                        <div class="metric" style="background: #e8f5e8; color: #2e7d32; padding: 15px; border-radius: 8px; margin: 10px 0; text-align: left;">
-                            <strong>💰 Profit Analysis:</strong><br>
-                            <strong>Selling for GOAT Lowest Ask:</strong> ${profit_data['actual_profit']:.2f} profit (${profit_data['profit_percentage']:.1f}% return) receiving ${profit_data['after_fees_amount']:.2f} (${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} fees) after fees if sold for ${profit_data['selling_price']:.2f}<br>
-                            <strong>Selling for GOAT Consignment:</strong> ${profit_data['consignment_actual_profit']:.2f} profit (${profit_data['consignment_profit_percentage']:.1f}% return) receiving ${profit_data['consignment_after_fees']:.2f} (${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} fees) after fees if sold for ${profit_data['consignment_selling_price']:.2f}<br>
-                            <strong>Selling for StockX Ask:</strong> ${profit_data['stockx_actual_profit']:.2f} profit (${profit_data['stockx_profit_percentage']:.1f}% return) receiving ${profit_data['stockx_after_fees']:.2f} (${profit_data['stockx_selling_price']:.2f} - ${profit_data['stockx_fees']:.2f} fees) after fees if sold for ${profit_data['stockx_selling_price']:.2f}
+                    {get_confidence_warning_section(recommendation.get('confidence', 'Unknown'), result) if 'low' in recommendation.get('confidence', '').lower() else ''}
+                </div>
+                
+                <!-- Profit Analysis Section -->
+                <div class="calculation-step" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: white; border-left: 5px solid #8BC34A;">
+                    <h3 style="color: white; font-size: 1.5em; text-align: center; margin-bottom: 25px;">💰 PROFIT ANALYSIS</h3>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <!-- GOAT Lowest Ask Profit -->
+                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
+                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">🎯 Selling for GOAT Lowest Ask</h4>
+                            <div style="text-align: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                                    ${profit_data['actual_profit']:.2f}
+                                </div>
+                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                    {profit_data['profit_percentage']:.1f}% Return
+                                </div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
+                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['after_fees_amount']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['selling_price']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>💸 GOAT Fees:</strong> ${profit_data['goat_fees']:.2f}</div>
+                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                                    ${profit_data['selling_price']:.2f} - ${profit_data['goat_fees']:.2f} = ${profit_data['after_fees_amount']:.2f}
+                                </div>
+                            </div>
                         </div>
-                        {get_confidence_warning_section(recommendation.get('confidence', 'Unknown'), result) if 'low' in recommendation.get('confidence', '').lower() else ''}
+                        
+                        <!-- GOAT Consignment Profit -->
+                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
+                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">📦 Selling for GOAT Consignment</h4>
+                            <div style="text-align: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                                    ${profit_data['consignment_actual_profit']:.2f}
+                                </div>
+                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                    {profit_data['consignment_profit_percentage']:.1f}% Return
+                                </div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
+                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['consignment_after_fees']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['consignment_selling_price']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>💸 Consignment Fees:</strong> ${profit_data['consignment_fees']:.2f}</div>
+                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                                    ${profit_data['consignment_selling_price']:.2f} - ${profit_data['consignment_fees']:.2f} = ${profit_data['consignment_after_fees']:.2f}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- StockX Ask Profit -->
+                        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3);">
+                            <h4 style="color: #FFD700; margin: 0 0 15px 0; font-size: 1.2em; text-align: center;">📈 Selling for StockX Ask</h4>
+                            <div style="text-align: center; margin-bottom: 15px;">
+                                <div style="font-size: 2.2em; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">
+                                    ${profit_data['stockx_actual_profit']:.2f}
+                                </div>
+                                <div style="font-size: 1.1em; color: #FFD700; font-weight: bold;">
+                                    {profit_data['stockx_profit_percentage']:.1f}% Return
+                                </div>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;">
+                                <div style="margin-bottom: 8px;"><strong>💰 Receiving:</strong> ${profit_data['stockx_after_fees']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>📊 Selling Price:</strong> ${profit_data['stockx_selling_price']:.2f}</div>
+                                <div style="margin-bottom: 8px;"><strong>💸 StockX Fees:</strong> ${profit_data['stockx_fees']:.2f}</div>
+                                <div style="font-size: 0.9em; opacity: 0.9; font-style: italic;">
+                                    ${profit_data['stockx_selling_price']:.2f} - ${profit_data['stockx_fees']:.2f} = ${profit_data['stockx_after_fees']:.2f}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Note -->
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 1.1em; color: #FFD700; font-weight: bold; margin-bottom: 5px;">
+                            💡 Profit Calculation Summary
+                        </div>
+                        <div style="font-size: 0.95em; opacity: 0.9;">
+                            Actual Profit = Receiving Amount - Buy Price (${calculations.get('step_6_final_decision', {}).get('final_price', 'N/A')})
+                        </div>
                     </div>
                 </div>
                 
