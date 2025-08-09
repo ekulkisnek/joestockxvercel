@@ -804,6 +804,154 @@ HTML_TEMPLATE = """
             console.log('🔍 WebSocket event received:', event, data);
         });
         
+        // Progressive Analysis Functionality
+        socket.on('progress', function(data) {
+            console.log('📊 Progress update:', data);
+            updateProgress(data);
+        });
+        
+        socket.on('result', function(data) {
+            console.log('✅ Analysis result:', data);
+            handleAnalysisResult(data);
+        });
+        
+        socket.on('error', function(data) {
+            console.log('❌ Analysis error:', data);
+            handleAnalysisError(data);
+        });
+        
+        // Progressive Analysis Form Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const progressiveForm = document.getElementById('progressive-analysis-form');
+            if (progressiveForm) {
+                progressiveForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    startProgressiveAnalysis();
+                });
+            }
+        });
+        
+        function startProgressiveAnalysis() {
+            const shoeQuery = document.getElementById('progressive_shoe_query').value;
+            const size = document.getElementById('progressive_shoe_size').value;
+            
+            if (!shoeQuery) {
+                alert('Please enter a shoe name or SKU');
+                return;
+            }
+            
+            // Show progress container
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('progress-text').textContent = 'Starting analysis...';
+            document.getElementById('progress-messages').innerHTML = '';
+            
+            // Disable form
+            document.getElementById('progressive-analyze-btn').disabled = true;
+            document.getElementById('progressive-analyze-btn').textContent = '🔄 Analyzing...';
+            
+            // Send analysis request
+            socket.emit('analyze_shoe_progressive', {
+                shoe_query: shoeQuery,
+                size: size
+            });
+        }
+        
+        function updateProgress(data) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const progressMessages = document.getElementById('progress-messages');
+            
+            // Update progress bar
+            if (data.progress_percentage) {
+                progressFill.style.width = data.progress_percentage + '%';
+            }
+            
+            // Update progress text
+            progressText.textContent = data.message;
+            
+            // Add progress message
+            const messageDiv = document.createElement('div');
+            messageDiv.style.marginBottom = '5px';
+            messageDiv.style.padding = '5px';
+            messageDiv.style.borderRadius = '3px';
+            messageDiv.style.backgroundColor = '#e9ecef';
+            messageDiv.innerHTML = `<strong>${data.step}</strong> ${data.message}`;
+            progressMessages.appendChild(messageDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
+        function handleAnalysisResult(data) {
+            // Re-enable form
+            document.getElementById('progressive-analyze-btn').disabled = false;
+            document.getElementById('progressive-analyze-btn').textContent = '🚀 Start Progressive Analysis';
+            
+            // Show success message
+            const progressText = document.getElementById('progress-text');
+            progressText.textContent = '✅ Analysis completed successfully!';
+            progressText.style.color = '#28a745';
+            
+            // Create result display
+            const progressMessages = document.getElementById('progress-messages');
+            const resultDiv = document.createElement('div');
+            resultDiv.style.marginTop = '15px';
+            resultDiv.style.padding = '15px';
+            resultDiv.style.backgroundColor = '#d4edda';
+            resultDiv.style.border = '1px solid #c3e6cb';
+            resultDiv.style.borderRadius = '5px';
+            resultDiv.style.color = '#155724';
+            
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <h4>🎯 Analysis Complete</h4>
+                    <p><strong>Query:</strong> ${data.query} (Size: ${data.size})</p>
+                    <p><strong>Processing Time:</strong> ${data.processing_time ? data.processing_time.toFixed(2) : 'N/A'}s</p>
+                    <p><strong>Status:</strong> ✅ Success</p>
+                    ${data.final_recommendation && data.final_recommendation.recommendation ? 
+                        `<p><strong>Recommendation:</strong> ${data.final_recommendation.recommendation}</p>` : ''}
+                    <button onclick="window.location.href='/advanced_results'" style="background: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                        📋 View All Results
+                    </button>
+                `;
+            } else {
+                resultDiv.style.backgroundColor = '#f8d7da';
+                resultDiv.style.border = '1px solid #f5c6cb';
+                resultDiv.style.color = '#721c24';
+                resultDiv.innerHTML = `
+                    <h4>❌ Analysis Failed</h4>
+                    <p><strong>Error:</strong> ${data.errors ? data.errors.join(', ') : 'Unknown error'}</p>
+                `;
+            }
+            
+            progressMessages.appendChild(resultDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
+        function handleAnalysisError(data) {
+            // Re-enable form
+            document.getElementById('progressive-analyze-btn').disabled = false;
+            document.getElementById('progressive-analyze-btn').textContent = '🚀 Start Progressive Analysis';
+            
+            // Show error message
+            const progressText = document.getElementById('progress-text');
+            progressText.textContent = '❌ Analysis failed';
+            progressText.style.color = '#dc3545';
+            
+            // Add error message
+            const progressMessages = document.getElementById('progress-messages');
+            const errorDiv = document.createElement('div');
+            errorDiv.style.marginTop = '15px';
+            errorDiv.style.padding = '15px';
+            errorDiv.style.backgroundColor = '#f8d7da';
+            errorDiv.style.border = '1px solid #f5c6cb';
+            errorDiv.style.borderRadius = '5px';
+            errorDiv.style.color = '#721c24';
+            errorDiv.innerHTML = `<h4>❌ Error</h4><p>${data.message || 'Unknown error occurred'}</p>`;
+            
+            progressMessages.appendChild(errorDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
         console.log('WebSocket initialization complete');
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
@@ -825,14 +973,46 @@ HTML_TEMPLATE = """
     <div class="search-section">
         <h2>🎯 Advanced Shoe Analysis</h2>
         <p>Get detailed pricing analysis with your specific logic and all calculations shown</p>
-        <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
-            <label for="advanced_shoe_query">Enter shoe name or SKU:</label><br>
-            <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
-            <label for="shoe_size">Size:</label><br>
-            <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
-            <input type="submit" value="🎯 Analyze with Pricing Logic" class="search-button" style="background: #dc3545; color: white; padding: 10px 20px; font-weight: bold;">
-        </form>
-        <p><small><strong>Features:</strong> StockX + GOAT data, sales volume analysis, detailed calculations, automatic result saving</small></p>
+        
+        <!-- Progressive Loading Analysis -->
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+            <h3>🚀 Progressive Analysis (Recommended)</h3>
+            <p><em>Real-time progress updates with parallel execution for faster results</em></p>
+            <form id="progressive-analysis-form" style="margin: 10px 0;">
+                <label for="progressive_shoe_query">Enter shoe name or SKU:</label><br>
+                <input type="text" name="shoe_query" id="progressive_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
+                <label for="progressive_shoe_size">Size:</label><br>
+                <input type="text" name="size" id="progressive_shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
+                <button type="submit" id="progressive-analyze-btn" class="search-button" style="background: #28a745; color: white; padding: 10px 20px; font-weight: bold;">
+                    🚀 Start Progressive Analysis
+                </button>
+            </form>
+            
+            <!-- Progress Display -->
+            <div id="progress-container" style="display: none; margin: 15px 0;">
+                <h4>📊 Analysis Progress</h4>
+                <div id="progress-bar" style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden;">
+                    <div id="progress-fill" style="background: linear-gradient(90deg, #28a745, #20c997); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                </div>
+                <div id="progress-text" style="margin-top: 5px; font-weight: bold; color: #28a745;"></div>
+                <div id="progress-messages" style="margin-top: 10px; max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px;"></div>
+            </div>
+        </div>
+        
+        <!-- Traditional Analysis -->
+        <div style="background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 15px 0;">
+            <h3>🎯 Traditional Analysis</h3>
+            <p><em>Standard analysis with parallel execution for improved performance</em></p>
+            <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
+                <label for="advanced_shoe_query">Enter shoe name or SKU:</label><br>
+                <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="Jordan 1 Chicago" required style="width: 300px; padding: 5px; margin: 5px 0;"><br>
+                <label for="shoe_size">Size:</label><br>
+                <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 100px; padding: 5px; margin: 5px 0;"><br>
+                <input type="submit" value="🎯 Analyze with Pricing Logic" class="search-button" style="background: #dc3545; color: white; padding: 10px 20px; font-weight: bold;">
+            </form>
+        </div>
+        
+        <p><small><strong>Features:</strong> StockX + GOAT data, sales volume analysis, detailed calculations, automatic result saving, parallel execution, rate limit handling</small></p>
         
         <div style="margin: 15px 0;">
             <a href="/advanced_results" style="background: #17a2b8; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;">
@@ -1712,12 +1892,12 @@ def advanced_analysis():
         return redirect(url_for('index'))
     
     try:
-        # Import and run advanced shoe analyzer
+        # Import and run parallel shoe analyzer for better performance
         sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
-        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+        from parallel_shoe_analyzer import ParallelShoeAnalyzer
         
-        analyzer = AdvancedShoeAnalyzer()
-        result = analyzer.analyze_shoe_with_pricing_logic(shoe_query, size)
+        analyzer = ParallelShoeAnalyzer(max_workers=3)
+        result = analyzer.analyze_shoe_with_pricing_logic_parallel(shoe_query, size)
         
         # Generate comprehensive HTML response
         return render_advanced_analysis(result)
@@ -4104,6 +4284,34 @@ def handle_request_output(data):
                 'line': line,
                 'status': 'running' if script_id in running_processes else 'completed'
             })
+
+@socketio.on('analyze_shoe_progressive')
+def handle_progressive_analysis(data):
+    """Handle progressive shoe analysis with real-time updates via WebSocket"""
+    shoe_query = data.get('shoe_query', '').strip()
+    size = data.get('size', '10').strip()
+    
+    if not shoe_query:
+        emit('error', {'message': 'Please enter a shoe name or SKU'})
+        return
+    
+    try:
+        # Import progressive loading analyzer
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from progressive_loading_analyzer import ProgressiveLoadingAnalyzer
+        
+        def progress_callback(update):
+            """Send progress updates via WebSocket"""
+            emit('progress', update)
+        
+        analyzer = ProgressiveLoadingAnalyzer(progress_callback=progress_callback, max_workers=3)
+        result = analyzer.analyze_shoe_with_progressive_loading(shoe_query, size)
+        
+        # Send final result
+        emit('result', result)
+        
+    except Exception as e:
+        emit('error', {'message': f'Analysis failed: {str(e)}'})
 
 @app.route('/favicon.ico')
 def favicon():
