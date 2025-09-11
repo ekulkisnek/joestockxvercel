@@ -1157,6 +1157,31 @@ class InventoryStockXAnalyzer:
         
         return cleaned
 
+    def _generate_sku_variations(self, sku: str) -> List[str]:
+        """Generate SKU variations for better matching (shared with advanced)"""
+        variations = [sku]
+        if '-' in sku:
+            variations.append(sku.replace('-', ' '))
+        if ' ' in sku:
+            variations.append(sku.replace(' ', '-'))
+            variations.append(sku.replace(' ', ''))
+        return list(set(variations))
+
+    def _normalize_sku_for_search(self, sku: str) -> str:
+        """Normalize SKU for optimal search (shared with advanced)"""
+        import re
+        if not sku:
+            return sku
+        normalized = sku.upper().strip()
+        normalized = re.sub(r'\s+', ' ', normalized)
+        if re.match(r'^[A-Z]{2}\d{3,4}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        if re.match(r'^\d{6}\s+\d{3}$', normalized):
+            normalized = normalized.replace(' ', '-')
+        normalized = re.sub(r'[_\s]+', '-', normalized)
+        normalized = normalized.rstrip('-')
+        return normalized
+
     def search_stockx_for_item(self, item: InventoryItem) -> bool:
         """Search StockX for inventory item"""
         # Check if this is a SKU-based search
@@ -1168,42 +1193,35 @@ class InventoryStockXAnalyzer:
             return self._search_by_name(item)
     
     def _search_by_sku(self, item: InventoryItem) -> bool:
-        """Search StockX using SKU/style ID"""
-        sku = item.shoe_name  # For SKU searches, shoe_name contains the SKU
+        """Search StockX using SKU/style ID with normalization and variations"""
+        sku = item.shoe_name
         size_normalized, size_category = self.normalize_size(item.size)
-
         cache_key = f"sku_{sku}_{size_normalized}_{size_category}"
-
         if cache_key in self.cache:
             return self._apply_cached_result(item, cache_key)
-
         try:
             print(f"🔍 SKU Search: '{sku}' (Size: {size_normalized} {size_category})", flush=True)
-
-            # Try searching by SKU/style ID first
-            search_results = self._try_sku_search(sku)
-            
-            if not search_results or not search_results.get('products'):
-                print(f"   ⚠️ No direct SKU match, trying as regular search term", flush=True)
-                # Fallback to regular search if SKU search fails
-                search_results = self.client.search_products(sku, page_size=10)
-
-            if not search_results or not search_results.get('products'):
-                print("   ❌ No products found for SKU", flush=True)
-                self.cache[cache_key] = None
-                return False
-
-            # For SKU searches, prefer exact SKU matches
-            best_product = self._find_best_sku_match(search_results['products'], sku, size_category)
-            
-            if not best_product:
-                print(f"   ❌ No suitable SKU match for {sku}")
-                self.cache[cache_key] = None
-                return False
-
-            print(f"   ✅ Found SKU match: {best_product['title'][:50]}...", flush=True)
-            return self._process_product_match(item, best_product, size_normalized, size_category, cache_key)
-
+            # Normalize first
+            normalized = self._normalize_sku_for_search(sku)
+            candidates = [normalized] + self._generate_sku_variations(normalized)
+            tried = set()
+            for candidate in candidates:
+                if candidate in tried:
+                    continue
+                tried.add(candidate)
+                try:
+                    search_results = self.client.search_products(candidate, page_size=10)
+                except Exception as e:
+                    print(f"   ⚠️ Search error for '{candidate}': {e}")
+                    continue
+                if search_results and search_results.get('products'):
+                    best_product = self._find_best_sku_match(search_results['products'], candidate, size_category)
+                    if best_product:
+                        print(f"   ✅ SKU match via '{candidate}': {best_product['title'][:50]}...", flush=True)
+                        return self._process_product_match(item, best_product, size_normalized, size_category, cache_key)
+            print("   ❌ No suitable SKU match after normalization/variations")
+            self.cache[cache_key] = None
+            return False
         except Exception as e:
             print(f"   ❌ SKU search error: {str(e)}")
             if "429" in str(e):

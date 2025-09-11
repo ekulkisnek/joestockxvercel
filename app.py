@@ -71,6 +71,16 @@ STOCKX_API_KEY = os.getenv('STOCKX_API_KEY', 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6c
 STOCKX_CLIENT_ID = os.getenv('STOCKX_CLIENT_ID', 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL')
 STOCKX_CLIENT_SECRET = os.getenv('STOCKX_CLIENT_SECRET', 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn')
 
+# Enhanced Replit detection (must be defined before token path resolution)
+def is_replit_environment():
+    """Check if running in Replit environment"""
+    return (
+        os.getenv('REPL_ID') is not None or 
+        os.getenv('REPLIT_DB_URL') is not None or
+        'replit' in os.getcwd().lower() or
+        os.path.exists('/home/runner')
+    )
+
 def _resolve_token_file_path():
     """Determine where to store tokens. Honors STOCKX_TOKEN_FILE if set.
     On Replit, default to ~/.stockx/tokens_full_scope.json to avoid repo conflicts.
@@ -95,15 +105,7 @@ TOKEN_FILE = _resolve_token_file_path()
 # Manual URL override for OAuth callback (set this if auto-detection fails)
 MANUAL_CALLBACK_URL = os.getenv('STOCKX_CALLBACK_URL', None)  # e.g., 'https://your-app.replit.app'
 
-# Enhanced Replit detection
-def is_replit_environment():
-    """Check if running in Replit environment"""
-    return (
-        os.getenv('REPL_ID') is not None or 
-        os.getenv('REPLIT_DB_URL') is not None or
-        'replit' in os.getcwd().lower() or
-        os.path.exists('/home/runner')
-    )
+# (moved is_replit_environment above)
 
 # Global auth state
 auth_state = {
