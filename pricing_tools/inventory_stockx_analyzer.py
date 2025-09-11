@@ -516,8 +516,8 @@ class InventoryStockXAnalyzer:
         size_info = self._extract_size_and_quantity_new_format(line)
         
         if not size_info:
-            print(f"   ⚠️ No size found in: {line[:50]}...")
-            return []
+            # Try to handle edge cases
+            return self._handle_edge_cases(line)
         
         # Extract shoe name (everything before size information)
         shoe_name = self._extract_shoe_name_new_format(line)
@@ -545,6 +545,25 @@ class InventoryStockXAnalyzer:
         
         print(f"   ✅ Parsed: '{shoe_name}' - {len(items)} items (no price)")
         return items
+    
+    def _handle_edge_cases(self, line: str) -> List[InventoryItem]:
+        """Handle edge cases like lines with only sizes or only shoe names"""
+        import re
+        
+        # Check if line contains only sizes (like "8, 9, 10")
+        size_only_pattern = r'^(\d+(?:\.\d+)?[YyWwCcMm]?(?:\s*,\s*\d+(?:\.\d+)?[YyWwCcMm]?)*)\s*$'
+        if re.match(size_only_pattern, line.strip()):
+            print(f"   ⚠️ Line contains only sizes, skipping: {line[:50]}...")
+            return []
+        
+        # Check if line contains only shoe name (no sizes)
+        # This could be a shoe name without size info - we'll skip it for now
+        # as it's not useful for inventory analysis without sizes
+        if len(line.strip()) > 5 and not re.search(r'\d', line):
+            print(f"   ⚠️ Line contains only shoe name, skipping: {line[:50]}...")
+            return []
+        
+        return []
     
     def _extract_size_and_quantity(self, text: str) -> List[Tuple[str, int]]:
         """Extract size and quantity information from text - handles multiple formats"""
@@ -629,7 +648,20 @@ class InventoryStockXAnalyzer:
             # Extract numeric part
             numeric_part = re.sub(r'[YyWwMmCc]', '', size_str)
             size_num = float(numeric_part)
-            # Reasonable shoe size range
+            
+            # Check for Youth sizes (Y suffix)
+            if size_str.upper().endswith('Y'):
+                return 3 <= size_num <= 7  # Youth sizes typically 3Y-7Y
+            
+            # Check for Infant sizes (C suffix)
+            if size_str.upper().endswith('C'):
+                return 1 <= size_num <= 5  # Infant sizes typically 1C-5C
+            
+            # Check for Women's sizes (W suffix)
+            if size_str.upper().endswith('W'):
+                return 5 <= size_num <= 12  # Women's sizes typically 5W-12W
+            
+            # Regular men's sizes (no suffix or M suffix)
             return 3 <= size_num <= 18
         except (ValueError, TypeError):
             return False
@@ -700,27 +732,39 @@ class InventoryStockXAnalyzer:
             return "Brand New"  # Default assumption
     
     def _extract_size_and_quantity_new_format(self, text: str) -> List[Tuple[str, int]]:
-        """Extract size and quantity information from new format text"""
+        """Extract size and quantity information from new format text - ROBUST VERSION"""
         import re
         
         size_info = []
         
-        # New format patterns - handle formats like:
-        # "7, 8, 8.5 women's"
-        # "Sz 9 & 12" 
-        # "8 & 10"
-        # "11"
-        # "Men's size 6, 9, 11, 11.5"
-        # "Size 9 & 9.5"
+        # Enhanced patterns to handle all possible formats including Youth/Infant sizes
         
-        # Pattern 1: Comma-separated sizes with gender suffix
-        # "7, 8, 8.5 women's" or "6, 9, 11, 11.5 Men's"
-        comma_pattern = r'(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*)\s*(?:women\'s|men\'s|w\'s|m\'s)?'
-        comma_match = re.search(comma_pattern, text, re.IGNORECASE)
-        if comma_match:
-            # Extract all sizes from the comma-separated list
-            sizes_text = comma_match.group(0)
-            sizes = re.findall(r'(\d+(?:\.\d+)?)', sizes_text)
+        # Pattern 1: Comma-separated sizes with quantities and gender
+        # "8 x2, 9 x1, 10 x3" or "6Y, 7Y, 8Y" or "3C, 4C, 5C"
+        quantity_comma_pattern = r'(\d+(?:\.\d+)?[YyWwCcMm]?)\s*(?:x\s*(\d+))?\s*(?:,\s*(\d+(?:\.\d+)?[YyWwCcMm]?)\s*(?:x\s*(\d+))?)*'
+        quantity_matches = re.findall(quantity_comma_pattern, text, re.IGNORECASE)
+        if quantity_matches:
+            for match in quantity_matches:
+                if match[0]:  # First size
+                    size = self._normalize_extracted_size(match[0])
+                    quantity = int(match[1]) if match[1] else 1
+                    if size and self._is_reasonable_shoe_size(size):
+                        size_info.append((size, quantity))
+                if match[2]:  # Second size
+                    size = self._normalize_extracted_size(match[2])
+                    quantity = int(match[3]) if match[3] else 1
+                    if size and self._is_reasonable_shoe_size(size):
+                        size_info.append((size, quantity))
+            if size_info:
+                return size_info
+        
+        # Pattern 2: Comma-separated sizes with gender suffix (no quantities)
+        # "7, 8, 8.5 women's" or "6Y, 7Y, 8Y Youth" or "3C, 4C, 5C Infant"
+        comma_gender_pattern = r'(\d+(?:\.\d+)?[YyWwCcMm]?)\s*,\s*(\d+(?:\.\d+)?[YyWwCcMm]?(?:\s*,\s*\d+(?:\.\d+)?[YyWwCcMm]?)*)\s*(?:women\'s|men\'s|w\'s|m\'s|youth|infant|youths|infants)?'
+        comma_gender_match = re.search(comma_gender_pattern, text, re.IGNORECASE)
+        if comma_gender_match:
+            sizes_text = comma_gender_match.group(0)
+            sizes = re.findall(r'(\d+(?:\.\d+)?[YyWwCcMm]?)', sizes_text)
             for size_str in sizes:
                 size = self._normalize_extracted_size(size_str)
                 if size and self._is_reasonable_shoe_size(size):
@@ -728,8 +772,8 @@ class InventoryStockXAnalyzer:
             if size_info:
                 return size_info
         
-        # Pattern 2: "Sz X & Y" or "Size X & Y"
-        sz_ampersand_pattern = r'(?:sz|size)\s+(\d+(?:\.\d+)?)\s*&\s*(\d+(?:\.\d+)?)'
+        # Pattern 3: "Sz X & Y" or "Size X & Y" with Youth/Infant support
+        sz_ampersand_pattern = r'(?:sz|size)\s+(\d+(?:\.\d+)?[YyWwCcMm]?)\s*&\s*(\d+(?:\.\d+)?[YyWwCcMm]?)'
         sz_ampersand_match = re.search(sz_ampersand_pattern, text, re.IGNORECASE)
         if sz_ampersand_match:
             size1 = self._normalize_extracted_size(sz_ampersand_match.group(1))
@@ -741,8 +785,8 @@ class InventoryStockXAnalyzer:
             if size_info:
                 return size_info
         
-        # Pattern 3: "X & Y" (simple ampersand format)
-        ampersand_pattern = r'(\d+(?:\.\d+)?)\s*&\s*(\d+(?:\.\d+)?)'
+        # Pattern 4: "X & Y" (simple ampersand format) with Youth/Infant support
+        ampersand_pattern = r'(\d+(?:\.\d+)?[YyWwCcMm]?)\s*&\s*(\d+(?:\.\d+)?[YyWwCcMm]?)'
         ampersand_match = re.search(ampersand_pattern, text)
         if ampersand_match:
             size1 = self._normalize_extracted_size(ampersand_match.group(1))
@@ -754,9 +798,9 @@ class InventoryStockXAnalyzer:
             if size_info:
                 return size_info
         
-        # Pattern 4: Single size with gender prefix
-        # "Men's size 6" or "women's 8.5"
-        gender_single_pattern = r'(?:men\'s|women\'s|w\'s|m\'s)\s*(?:size\s+)?(\d+(?:\.\d+)?)'
+        # Pattern 5: Single size with gender prefix
+        # "Men's size 6" or "women's 8.5" or "Youth 6Y" or "Infant 3C"
+        gender_single_pattern = r'(?:men\'s|women\'s|w\'s|m\'s|youth|infant|youths|infants)\s*(?:size\s+)?(\d+(?:\.\d+)?[YyWwCcMm]?)'
         gender_single_match = re.search(gender_single_pattern, text, re.IGNORECASE)
         if gender_single_match:
             size = self._normalize_extracted_size(gender_single_match.group(1))
@@ -764,8 +808,8 @@ class InventoryStockXAnalyzer:
                 size_info.append((size, 1))
                 return size_info
         
-        # Pattern 4.5: Single size with gender suffix (like "8.5 women's")
-        gender_suffix_pattern = r'(\d+(?:\.\d+)?)\s*(?:women\'s|men\'s|w\'s|m\'s)'
+        # Pattern 6: Single size with gender suffix (like "8.5 women's" or "6Y Youth")
+        gender_suffix_pattern = r'(\d+(?:\.\d+)?[YyWwCcMm]?)\s*(?:women\'s|men\'s|w\'s|m\'s|youth|infant|youths|infants)'
         gender_suffix_match = re.search(gender_suffix_pattern, text, re.IGNORECASE)
         if gender_suffix_match:
             size = self._normalize_extracted_size(gender_suffix_match.group(1))
@@ -773,9 +817,9 @@ class InventoryStockXAnalyzer:
                 size_info.append((size, 1))
                 return size_info
         
-        # Pattern 5: Single size at the end
-        # "11" or "5" at the end of the line
-        single_size_pattern = r'(\d+(?:\.\d+)?)\s*$'
+        # Pattern 7: Single size at the end (including Youth/Infant)
+        # "11" or "5" or "6Y" or "3C" at the end of the line
+        single_size_pattern = r'(\d+(?:\.\d+)?[YyWwCcMm]?)\s*$'
         single_size_match = re.search(single_size_pattern, text)
         if single_size_match:
             size = self._normalize_extracted_size(single_size_match.group(1))
@@ -786,32 +830,39 @@ class InventoryStockXAnalyzer:
         return size_info
     
     def _extract_shoe_name_new_format(self, text: str) -> str:
-        """Extract shoe name from new format text, removing size information"""
+        """Extract shoe name from new format text, removing size information - ROBUST VERSION"""
         import re
         
         # Remove size patterns from the new format
         text_clean = text
         
-        # Remove comma-separated sizes with gender suffix
-        text_clean = re.sub(r'\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)+\s*(?:women\'s|men\'s|w\'s|m\'s)?', '', text_clean, flags=re.IGNORECASE)
+        # Remove comma-separated sizes with quantities and gender
+        # "8 x2, 9 x1, 10 x3" or "6Y, 7Y, 8Y" or "3C, 4C, 5C"
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?[YyWwCcMm]?(?:\s*x\s*\d+)?(?:\s*,\s*\d+(?:\.\d+)?[YyWwCcMm]?(?:\s*x\s*\d+)?)+\s*(?:women\'s|men\'s|w\'s|m\'s|youth|infant|youths|infants)?', '', text_clean, flags=re.IGNORECASE)
         
-        # Remove "Sz X & Y" or "Size X & Y" patterns
-        text_clean = re.sub(r'\s*(?:sz|size)\s+\d+(?:\.\d+)?\s*&\s*\d+(?:\.\d+)?', '', text_clean, flags=re.IGNORECASE)
+        # Remove "Sz X & Y" or "Size X & Y" patterns with Youth/Infant support
+        text_clean = re.sub(r'\s*(?:sz|size)\s+\d+(?:\.\d+)?[YyWwCcMm]?\s*&\s*\d+(?:\.\d+)?[YyWwCcMm]?', '', text_clean, flags=re.IGNORECASE)
         
-        # Remove "X & Y" patterns
-        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*&\s*\d+(?:\.\d+)?', '', text_clean)
+        # Remove "X & Y" patterns with Youth/Infant support
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?[YyWwCcMm]?\s*&\s*\d+(?:\.\d+)?[YyWwCcMm]?', '', text_clean)
         
-        # Remove gender + size patterns
-        text_clean = re.sub(r'\s*(?:men\'s|women\'s|w\'s|m\'s)\s*(?:size\s+)?\d+(?:\.\d+)?', '', text_clean, flags=re.IGNORECASE)
+        # Remove gender + size patterns with Youth/Infant support
+        text_clean = re.sub(r'\s*(?:men\'s|women\'s|w\'s|m\'s|youth|infant|youths|infants)\s*(?:size\s+)?\d+(?:\.\d+)?[YyWwCcMm]?', '', text_clean, flags=re.IGNORECASE)
         
-        # Remove size + gender patterns (like "8.5 women's")
-        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*(?:women\'s|men\'s|w\'s|m\'s)', '', text_clean, flags=re.IGNORECASE)
+        # Remove size + gender patterns (like "8.5 women's" or "6Y Youth")
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?[YyWwCcMm]?\s*(?:women\'s|men\'s|w\'s|m\'s|youth|infant|youths|infants)', '', text_clean, flags=re.IGNORECASE)
         
-        # Remove single size at the end
-        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*$', '', text_clean)
+        # Remove single size at the end (including Youth/Infant)
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?[YyWwCcMm]?\s*$', '', text_clean)
         
         # Remove "Sz" at the end (common pattern)
         text_clean = re.sub(r'\s*sz\s*$', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove quantity patterns (x2, x1, etc.)
+        text_clean = re.sub(r'\s*x\s*\d+', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove condition indicators
+        text_clean = re.sub(r'\s*(?:DS|VNDS|NB|OG\s+ALL)\s*$', '', text_clean, flags=re.IGNORECASE)
         
         # Clean up extra spaces
         text_clean = re.sub(r'\s+', ' ', text_clean).strip()
