@@ -1179,8 +1179,8 @@ HTML_TEMPLATE = """
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </head>
 <body>
-    <h1>🤖 StockX Tools - Web Interface</h1>
-    <p>Complete StockX API integration with authentication, search, and bulk analysis</p>
+    <h1>🤖 StockX Tools</h1>
+    <p style="margin-top: -6px">Complete StockX API integration with authentication, search, and bulk analysis</p>
     
     {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -1192,6 +1192,55 @@ HTML_TEMPLATE = """
         {% endif %}
     {% endwith %}
     
+    {% if running_processes %}
+    <div class="running-processes" style="border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #f8f9fa;">
+        <h2>🔄 Running Processes</h2>
+        {% for script_id in running_processes %}
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <span class="running-indicator">⏳ {{ script_id }} is running...</span>
+                <button onclick="stopProcess('{{ script_id }}')" 
+                        style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer;">
+                    Stop Process
+                </button>
+            </div>
+        {% endfor %}
+        <p><small>Real-time streaming updates via WebSocket</small></p>
+    </div>
+    {% endif %}
+
+    <div class="upload-section">
+        <h2>📊 Bulk Analysis Tools</h2>
+        <h3>�� Inventory Analysis</h3>
+        <!-- Upload CSV Option -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>📁 Upload CSV File</h4>
+            <form action="/upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+                <input type="hidden" name="script_type" value="inventory">
+                <label for="inventory_upload">Upload inventory CSV file:</label><br>
+                <input type="file" name="file" id="inventory_upload" accept=".csv" style="margin: 5px 0;"><br>
+                <input type="submit" value="Upload & Run Inventory Analysis" class="upload-button">
+            </form>
+        </div>
+        
+        <!-- Paste List Option -->
+        <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <h4>📋 Paste Inventory List</h4>
+            <p><em>Copy your inventory from Excel/Google Sheets and paste it here</em></p>
+            <form action="/paste_inventory" method="post" style="margin: 10px 0;">
+                <label for="pasted_inventory">Paste your inventory list:</label><br>
+                <textarea name="inventory_text" id="pasted_inventory" rows="8" cols="60" 
+                         placeholder="Jordan 3 white cement 88 - size 11 ($460)
+Supreme air max 1 87 white - size 11.5x2, 12 ($210)
+Yeezy bone 500 - size 4.5x13, 5x9, 5.5x4 ($185)
+White cement 4 - size 8,8.5x2,9.5,10.5,11x8,11.5x3,12x4 ($245)"
+                         style="margin: 5px 0; width: 100%; font-family: monospace;"></textarea><br>
+                <input type="submit" value="Process Pasted Inventory" class="upload-button">
+            </form>
+        </div>
+        
+        <p><em>Both options analyze inventory against StockX market data with Alias pricing insights</em></p>
+    </div>
+
     <div class="search-section">
         <h2>🎯 Advanced Shoe Analysis</h2>
         <p>Get detailed pricing analysis with your specific logic and all calculations shown</p>
@@ -1208,35 +1257,6 @@ HTML_TEMPLATE = """
             <a href="/advanced_results" style="background: #17a2b8; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px;">
                 📋 View All Saved Results
             </a>
-        </div>
-    </div>
-    
-    <div class="search-section">
-        <h2>📚 Advanced Multi‑Shoe Analysis</h2>
-        <p>Upload a sheet or paste a list to run the same advanced logic across multiple shoes.</p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
-                <h4>📁 Upload CSV</h4>
-                <form action="/advanced_multi_upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
-                    <label for="advanced_multi_upload">Upload CSV with shoe and size columns:</label><br>
-                    <input type="file" name="file" id="advanced_multi_upload" accept=".csv" style="margin: 5px 0;"><br>
-                    <button type="submit" class="upload-button">Run Advanced Multi‑Shoe</button>
-                </form>
-                <p><small>Flexible column detection: name/SKU, size, price, condition.</small></p>
-            </div>
-            <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
-                <h4>📋 Paste List</h4>
-                <form action="/advanced_multi_paste" method="post" style="margin: 10px 0;">
-                    <label for="advanced_multi_inventory_text">Paste your list:</label><br>
-                    <textarea name="advanced_multi_inventory_text" id="advanced_multi_inventory_text" rows="8" cols="60" 
-                             placeholder="DQ8426 067 - sz12 x2
-Jordan 1 Retro High OG 'Royal Reimagined' - sz10 ($235)
-DD1391 100 - sz10.5" 
-                             style="margin: 5px 0; width: 100%; font-family: monospace;"></textarea><br>
-                    <button type="submit" class="upload-button">Run Advanced Multi‑Shoe</button>
-                </form>
-                <p><small>SKU and name formats supported; sizes like sz10, 10W, 5Y, etc.</small></p>
-            </div>
         </div>
     </div>
     
@@ -1320,13 +1340,7 @@ DD1391 100 - sz10.5"
 
     
     <div class="search-section">
-        <h2>🔍 Product Search</h2>
-        <p>Search for any shoe and get complete StockX information</p>
-        <form action="/search" method="post" style="margin: 10px 0;">
-            <label for="search_query">Enter shoe name (e.g., "Jordan 1 Chicago", "Nike Dunk Panda"):</label><br>
-            <input type="text" name="query" id="search_query" placeholder="Jordan 1 Chicago" required><br>
-            <input type="submit" value="Search StockX" class="search-button">
-        </form>
+        <p><a href="/tools" style="text-decoration: none;">📚 View Other Tools (Single Shoe, SKU Finder, Sales Volume, Advanced Multi‑Shoe)</a></p>
     </div>
     
     <div class="upload-section">
@@ -2145,6 +2159,94 @@ def advanced_results():
     except Exception as e:
         flash(f'Error loading results: {str(e)}')
         return redirect(url_for('index'))
+
+@app.route('/tools')
+def other_tools():
+    """Subpage for auxiliary tools to declutter the main page"""
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>📚 Tools</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .card { border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+            .btn { display: inline-block; padding: 8px 16px; background: #007bff; color: #fff; text-decoration: none; border-radius: 4px; }
+            .btn-secondary { background: #17a2b8; }
+        </style>
+    </head>
+    <body>
+        <h1>📚 Other Tools</h1>
+        <p><a href="/" class="btn">← Back to Main</a></p>
+
+        <div class="card">
+            <h2>🔍 Single Shoe Analysis</h2>
+            <h3>🎯 Comprehensive Single Shoe Analysis</h3>
+            <p>Get complete pricing, sales volume, and market insights for any shoe in one detailed report</p>
+            <form action="/advanced_analysis" method="post" style="margin: 10px 0;">
+                <label for="advanced_shoe_query">Enter shoe name, SKU, or description:</label><br>
+                <input type="text" name="shoe_query" id="advanced_shoe_query" placeholder="e.g., Jordan 1 Chicago, DQ8426-067, Yeezy Boost 350 Cream" style="width: 420px; padding: 6px;" required>
+                <label for="shoe_size" style="margin-left: 10px;">Size:</label>
+                <input type="text" name="size" id="shoe_size" placeholder="10" value="10" style="width: 80px; padding: 6px;">
+                <button type="submit" class="btn" style="margin-left: 10px;">Run Analysis</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>🔍 SKU Finder</h2>
+            <h3>🔍 Find StockX SKUs</h3>
+            <p>Paste a list of shoe names and get their corresponding StockX SKUs and official names</p>
+            <form action="/find_skus" method="post">
+                <textarea name="shoe_text" rows="8" cols="60" placeholder="Jordan 1 Chicago\nNike Dunk Low Panda\nYeezy Boost 350 Cream\nAir Jordan 4 White Cement\nNike Air Max 1" style="width: 100%; font-family: monospace;"></textarea><br>
+                <button type="submit" class="btn">Find SKUs</button>
+            </form>
+            <p><small>Features: Smart parsing, StockX SKU lookup, official name matching, CSV export format, success rate tracking</small></p>
+        </div>
+
+        <div class="card">
+            <h2>📈 Sales Volume Analysis</h2>
+            <h3>📊 Upload CSV for Sales Volume Analysis</h3>
+            <p>Analyze sales velocity and volume data for your shoe inventory using Alias API</p>
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="script_type" value="sales_volume">
+                <label for="sales_volume_upload">Upload CSV file with shoe names/SKUs:</label><br>
+                <input type="file" name="file" id="sales_volume_upload" accept=".csv" style="margin: 5px 0;">
+                <button type="submit" class="btn">Run Sales Volume</button>
+            </form>
+            <p><small>Features: Sales velocity per day, total sales counts, price analysis, reliability indicators, duplicate detection</small></p>
+        </div>
+
+        <div class="card">
+            <h2>📚 Advanced Multi‑Shoe Analysis</h2>
+            <p>Upload a sheet or paste a list to run the same advanced logic across multiple shoes.</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
+                    <h4>📁 Upload CSV</h4>
+                    <form action="/advanced_multi_upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+                        <label for="advanced_multi_upload">Upload CSV with shoe and size columns:</label><br>
+                        <input type="file" name="file" id="advanced_multi_upload" accept=".csv" style="margin: 5px 0;"><br>
+                        <button type="submit" class="btn">Run Advanced Multi‑Shoe</button>
+                    </form>
+                    <p><small>Flexible column detection: name/SKU, size, price, condition.</small></p>
+                </div>
+                <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
+                    <h4>📋 Paste List</h4>
+                    <form action="/advanced_multi_paste" method="post" style="margin: 10px 0;">
+                        <label for="advanced_multi_inventory_text">Paste your list:</label><br>
+                        <textarea name="advanced_multi_inventory_text" id="advanced_multi_inventory_text" rows="8" cols="60" 
+                                 placeholder="DQ8426 067 - sz12 x2\nJordan 1 Retro High OG 'Royal Reimagined' - sz10 ($235)\nDD1391 100 - sz10.5" 
+                                 style="margin: 5px 0; width: 100%; font-family: monospace;"></textarea><br>
+                        <button type="submit" class="btn">Run Advanced Multi‑Shoe</button>
+                    </form>
+                    <p><small>SKU and name formats supported; sizes like sz10, 10W, 5Y, etc.</small></p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """)
 
 @app.route('/advanced_multi_upload', methods=['POST'])
 def advanced_multi_upload():

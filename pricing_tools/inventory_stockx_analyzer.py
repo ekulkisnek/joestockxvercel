@@ -2002,7 +2002,7 @@ class InventoryStockXAnalyzer:
             'stockx_bid', 'stockx_ask', 'lowest_consigned', 'last_consigned_price', 'last_consigned_date',
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date', 'consignment_price', 'ship_to_verify_price', 'weekly_volume',
             # Net after GOAT fees when selling at lowest GOAT with our offer
-            'net_after_goat_fees_lowest_with_offer',
+            'net_after_goat_fees_lowest_with_offer', 'roi',
             # Finally identifiers
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
@@ -2079,8 +2079,10 @@ class InventoryStockXAnalyzer:
                 # Net after GOAT fees when selling at lowest GOAT, buying at our offer
                 if offer_num is not None and goat_abs_lowest is not None:
                     net_after_goat = goat_abs_lowest * (1 - GOAT_FEE_RATE) - offer_num
+                    roi_pct = (net_after_goat / offer_num * 100.0) if offer_num > 0 else None
                 else:
                     net_after_goat = None
+                    roi_pct = None
 
                 # Add our new data
                 row.update({
@@ -2102,6 +2104,7 @@ class InventoryStockXAnalyzer:
                     'ship_to_verify_price': item.ship_to_verify_price or '',
                     'weekly_volume': f"{item.weekly_volume:.0f}" if item.weekly_volume is not None else '',
                     'net_after_goat_fees_lowest_with_offer': f"${net_after_goat:.2f}" if net_after_goat is not None else '',
+                    'roi': f"{roi_pct:.1f}%" if roi_pct is not None else '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
