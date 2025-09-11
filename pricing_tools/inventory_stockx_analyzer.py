@@ -1102,16 +1102,25 @@ class InventoryStockXAnalyzer:
             print(f"   ❌ Volume calculation error: {str(e)}")
             return 0.0
     
-    def calculate_price_offer(self, item: InventoryItem) -> Tuple[Optional[float], str]:
-        """Calculate price offer ensuring 20% margin vs GOAT absolute lowest, with volume-specific rules"""
+    def calculate_price_offer(self, item: InventoryItem, overrides: Optional[Dict] = None) -> Tuple[Optional[float], str]:
+        """Calculate price offer ensuring 20% margin vs GOAT absolute lowest, with volume-specific rules.
+        Optionally accepts overrides for numeric values to avoid timing/order issues.
+        overrides keys: stockx_bid, goat_ship_to_verify, goat_consigned, weekly_volume
+        """
         try:
             # Extract numeric values
-            stockx_bid = self._parse_price(item.stockx_bid) if item.stockx_bid else None
-            stockx_ask = self._parse_price(item.stockx_ask) if item.stockx_ask else None
-            
-            # Get GOAT lowest ask (including both consigned and ship-to-verify)
-            goat_consigned = self._parse_price(item.lowest_consigned) if item.lowest_consigned else None
-            goat_ship_to_verify = self._parse_price(item.ship_to_verify_price) if item.ship_to_verify_price else None
+            if overrides:
+                stockx_bid = overrides.get('stockx_bid') if overrides.get('stockx_bid') is not None else (self._parse_price(item.stockx_bid) if item.stockx_bid else None)
+                stockx_ask = overrides.get('stockx_ask') if overrides.get('stockx_ask') is not None else (self._parse_price(item.stockx_ask) if item.stockx_ask else None)
+                goat_consigned = overrides.get('goat_consigned') if overrides.get('goat_consigned') is not None else (self._parse_price(item.lowest_consigned) if item.lowest_consigned else None)
+                goat_ship_to_verify = overrides.get('goat_ship_to_verify') if overrides.get('goat_ship_to_verify') is not None else (self._parse_price(item.ship_to_verify_price) if item.ship_to_verify_price else None)
+                weekly_volume = overrides.get('weekly_volume') if overrides.get('weekly_volume') is not None else (item.weekly_volume or 0.0)
+            else:
+                stockx_bid = self._parse_price(item.stockx_bid) if item.stockx_bid else None
+                stockx_ask = self._parse_price(item.stockx_ask) if item.stockx_ask else None
+                goat_consigned = self._parse_price(item.lowest_consigned) if item.lowest_consigned else None
+                goat_ship_to_verify = self._parse_price(item.ship_to_verify_price) if item.ship_to_verify_price else None
+                weekly_volume = item.weekly_volume or 0.0
             
             # Determine GOAT absolute lowest (including both consigned and ship-to-verify)
             valid_goat_prices = [p for p in [goat_consigned, goat_ship_to_verify] if p is not None and p > 0]
@@ -1119,7 +1128,6 @@ class InventoryStockXAnalyzer:
             target_max_payment = goat_absolute_lowest * 0.8 if goat_absolute_lowest else None
             
             # Get weekly volume
-            weekly_volume = item.weekly_volume or 0.0
             is_high_volume = weekly_volume >= 3.0
             
             print(f"   💰 Price Offer Calculation:")
@@ -1601,9 +1609,18 @@ class InventoryStockXAnalyzer:
             item.bid_profit = f"${bid_profit:.2f}" if bid_profit is not None else None
             item.ask_profit = f"${ask_profit:.2f}" if ask_profit is not None else None
 
-            # Now that item has StockX and GOAT data, calculate price offer
+            # Now that item has StockX and GOAT data, calculate price offer using raw numbers to avoid string parsing mishaps
             print(f"   💰 Calculating price offer...", flush=True)
-            offer_price, offer_reasoning = self.calculate_price_offer(item)
+            offer_price, offer_reasoning = self.calculate_price_offer(
+                item,
+                overrides={
+                    'stockx_bid': float(bid_amount) if bid_amount is not None else None,
+                    'stockx_ask': float(ask_amount) if ask_amount is not None else None,
+                    'goat_ship_to_verify': float(alias_data['ship_to_verify_price']) if alias_data and alias_data.get('ship_to_verify_price') is not None else None,
+                    'goat_consigned': float(alias_data['consignment_price']) if alias_data and alias_data.get('consignment_price') is not None else None,
+                    'weekly_volume': float(weekly_volume) if weekly_volume is not None else 0.0
+                }
+            )
             item.price_offer = f"${offer_price:.2f}" if offer_price is not None else None
             item.offer_reasoning = offer_reasoning
 
