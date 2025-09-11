@@ -4040,17 +4040,22 @@ def list_downloads():
     files = []
     
     for directory in download_dirs:
-        if os.path.exists(directory):
-            for filename in os.listdir(directory):
+        abs_dir = os.path.join(app.root_path, directory)
+        if os.path.exists(abs_dir):
+            try:
+                dir_listing = os.listdir(abs_dir)
+            except Exception:
+                dir_listing = []
+            for filename in dir_listing:
                 # Look for CSV files and enhanced output files (which might be .txt)
                 if (filename.endswith('.csv') or 
                     (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
-                    filepath = os.path.join(directory, filename)
+                    filepath = os.path.join(abs_dir, filename)
                     try:
                         file_info = {
                             'name': filename,
-                            'path': directory,
+                            'path': directory,  # keep relative path for URL
                             'size': os.path.getsize(filepath),
                             'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).strftime('%Y-%m-%d %H:%M:%S')
                         }
@@ -4126,7 +4131,12 @@ def list_downloads():
 def download_file(directory, filename):
     """Download a specific file"""
     try:
-        return send_from_directory(directory, filename, as_attachment=True)
+        abs_dir = os.path.join(app.root_path, directory)
+        # Prevent path traversal
+        if not abs_dir.startswith(app.root_path):
+            flash('Invalid path')
+            return redirect(url_for('list_downloads'))
+        return send_from_directory(abs_dir, filename, as_attachment=True)
     except FileNotFoundError:
         flash('File not found')
         return redirect(url_for('list_downloads'))
@@ -4136,7 +4146,8 @@ def view_csv(directory, filename):
     """View CSV file contents in browser"""
     try:
         import csv
-        filepath = os.path.join(directory, filename)
+        abs_dir = os.path.join(app.root_path, directory)
+        filepath = os.path.join(abs_dir, filename)
         
         if not os.path.exists(filepath):
             flash('File not found')
