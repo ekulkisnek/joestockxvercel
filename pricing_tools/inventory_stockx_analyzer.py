@@ -82,6 +82,9 @@ class InventoryItem:
         self.weekly_volume_prev = None  # Previous estimate (velocity*7)
         self.price_offer = None
         self.offer_reasoning = None
+        
+        # Sales history summary
+        self.last_5_sales_text = None
     
     def _extract_condition_notes(self, shoe_name: str) -> str:
         """Extract condition notes from shoe name (DS, VNDS, no box, etc.)"""
@@ -1628,11 +1631,32 @@ class InventoryStockXAnalyzer:
                 except Exception:
                     size_float_for_volume = None
                 weekly_volume = 0.0
+                last_5_sales_lines = []
                 if size_float_for_volume is not None:
                     sales_data_exact = self.volume_analyzer._get_sales_for_size(alias_catalog_id, size_float_for_volume)
                     if sales_data_exact:
                         now_ts = datetime.now(timezone.utc).timestamp()
                         one_week_ago_ts = now_ts - 7 * 24 * 3600
+                        # Capture last 5 sales details (sorted desc by date)
+                        try:
+                            sorted_sales = sorted(
+                                [s for s in sales_data_exact if s.get('purchased_at') and s.get('price_cents')],
+                                key=lambda x: x.get('purchased_at', ''), reverse=True
+                            )
+                            for idx, sale in enumerate(sorted_sales[:5], 1):
+                                price_cents = sale.get('price_cents')
+                                price_dollars = float(price_cents) / 100.0 if price_cents is not None else None
+                                ds = sale.get('purchased_at')
+                                try:
+                                    dt = datetime.fromisoformat(ds.replace('Z', '+00:00')) if 'T' in ds else datetime.fromisoformat(ds)
+                                    days_ago = (datetime.now(timezone.utc).date() - dt.date()).days
+                                except Exception:
+                                    days_ago = None
+                                if price_dollars is not None and days_ago is not None:
+                                    last_5_sales_lines.append(f"#{idx}: ${price_dollars:.2f} ({days_ago} days ago)")
+                        except Exception:
+                            pass
+                        # Count last 7 days
                         for sale in sales_data_exact:
                             date_str = sale.get('purchased_at')
                             if not date_str:
@@ -1644,6 +1668,7 @@ class InventoryStockXAnalyzer:
                             except Exception:
                                 continue
                 weekly_volume = float(weekly_volume)
+                item.last_5_sales_text = "\n".join(last_5_sales_lines) if last_5_sales_lines else ''
             else:
                 weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
             item.weekly_volume = weekly_volume
@@ -1964,6 +1989,7 @@ class InventoryStockXAnalyzer:
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
             'consignment_price', 'ship_to_verify_price',
             'weekly_volume', 'weekly_volume_prev', 'price_offer', 'offer_reasoning',
+            'last_5_sales_text',
             # Bulk advanced-style simple metrics for spreadsheet use
             'final_recommendation',
             'price_offer_numeric',
@@ -2095,6 +2121,7 @@ class InventoryStockXAnalyzer:
                     'weekly_volume_prev': f"{item.weekly_volume_prev:.2f}" if item.weekly_volume_prev is not None else '',
                     'price_offer': item.price_offer or '',
                     'offer_reasoning': item.offer_reasoning or '',
+                    'last_5_sales_text': item.last_5_sales_text or '',
                     'final_recommendation': final_reco,
                     'price_offer_numeric': f"{offer_num:.2f}" if offer_num is not None else '',
                     'stockx_bid_numeric': f"{stockx_bid_num:.2f}" if stockx_bid_num is not None else '',

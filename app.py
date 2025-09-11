@@ -1468,7 +1468,7 @@ Nike Air Max 1"
                     {% endif %}
                 </div>
                 <div id="output-{{ script_id }}">
-                    <pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">{{ output.content }}</pre>
+                    <pre style="max-height: 300px; overflow-y: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px; white-space: pre-wrap; display: flex; flex-direction: column-reverse;">{{ output.content }}</pre>
                 </div>
                 <hr>
             </div>
