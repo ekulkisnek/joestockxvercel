@@ -1544,7 +1544,13 @@ class InventoryStockXAnalyzer:
             input_path = Path(csv_file)
             # Always use .csv extension for output files
             output_filename = f"stockx_enhanced_{input_path.stem}.csv"
-            output_file = input_path.parent / output_filename
+            # Save generated outputs into top-level uploads directory to avoid repo root clutter
+            uploads_dir = Path(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads'))
+            try:
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            output_file = uploads_dir / output_filename
 
         print(f"📊 Processing CSV inventory: {csv_file}", flush=True)
         print(f"💾 Output will be saved to: {output_file}", flush=True)
@@ -1567,7 +1573,12 @@ class InventoryStockXAnalyzer:
             input_path = Path(text_file)
             # Always use .csv extension for output files
             output_filename = f"stockx_enhanced_{input_path.stem}.csv"
-            output_file = input_path.parent / output_filename
+            uploads_dir = Path(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads'))
+            try:
+                uploads_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            output_file = uploads_dir / output_filename
 
         print(f"📋 Processing pasted list: {text_file}", flush=True)
         print(f"💾 Output will be saved to: {output_file}", flush=True)

@@ -66,14 +66,44 @@ import os
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# StockX OAuth configuration
-STOCKX_API_KEY = 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp'
-STOCKX_CLIENT_ID = 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL'
-STOCKX_CLIENT_SECRET = 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn'
-TOKEN_FILE = os.path.join(os.getcwd(), 'tokens_full_scope.json')
+# StockX OAuth configuration - supports environment variables for Replit deployment
+STOCKX_API_KEY = os.getenv('STOCKX_API_KEY', 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp')
+STOCKX_CLIENT_ID = os.getenv('STOCKX_CLIENT_ID', 'QyK8U0Xir3L3wQjYtBlLuXpMOLANa5EL')
+STOCKX_CLIENT_SECRET = os.getenv('STOCKX_CLIENT_SECRET', 'uqJXWo1oN10iU6qyAiTIap1B0NmuZMsZn6vGp7oO1uK-Ng4-aoSTbRHA5kfNV3Mn')
+
+def _resolve_token_file_path():
+    """Determine where to store tokens. Honors STOCKX_TOKEN_FILE if set.
+    On Replit, default to ~/.stockx/tokens_full_scope.json to avoid repo conflicts.
+    Locally, default to ./tokens_full_scope.json.
+    """
+    # Explicit override takes precedence
+    env_path = os.getenv('STOCKX_TOKEN_FILE')
+    if env_path:
+        return env_path
+    
+    # Prefer hidden home directory on hosted environments
+    if is_replit_environment():
+        home_dir = os.path.expanduser('~')
+        hidden_dir = os.path.join(home_dir, '.stockx')
+        return os.path.join(hidden_dir, 'tokens_full_scope.json')
+    
+    # Fallback: current working directory
+    return os.path.join(os.getcwd(), 'tokens_full_scope.json')
+
+TOKEN_FILE = _resolve_token_file_path()
 
 # Manual URL override for OAuth callback (set this if auto-detection fails)
 MANUAL_CALLBACK_URL = os.getenv('STOCKX_CALLBACK_URL', None)  # e.g., 'https://your-app.replit.app'
+
+# Enhanced Replit detection
+def is_replit_environment():
+    """Check if running in Replit environment"""
+    return (
+        os.getenv('REPL_ID') is not None or 
+        os.getenv('REPLIT_DB_URL') is not None or
+        'replit' in os.getcwd().lower() or
+        os.path.exists('/home/runner')
+    )
 
 # Global auth state
 auth_state = {
@@ -248,6 +278,14 @@ def refresh_access_token():
             # Add timestamp for tracking
             new_tokens['refreshed_at'] = time.time()
             
+            # Ensure directory exists before writing
+            try:
+                token_dir = os.path.dirname(TOKEN_FILE)
+                if token_dir:
+                    os.makedirs(token_dir, exist_ok=True)
+            except Exception:
+                pass
+            
             # Atomic write to prevent corruption
             temp_file = TOKEN_FILE + '.tmp'
             with open(temp_file, 'w') as f:
@@ -390,6 +428,14 @@ def exchange_code_for_tokens(auth_code):
     
     if response.status_code == 200:
         tokens = response.json()
+        
+        # Ensure directory exists before writing
+        try:
+            token_dir = os.path.dirname(TOKEN_FILE)
+            if token_dir:
+                os.makedirs(token_dir, exist_ok=True)
+        except Exception:
+            pass
         
         with open(TOKEN_FILE, 'w') as f:
             json.dump(tokens, f, indent=2)
@@ -804,6 +850,258 @@ HTML_TEMPLATE = """
             console.log('🔍 WebSocket event received:', event, data);
         });
         
+        // Progressive Analysis Functionality
+        socket.on('progress', function(data) {
+            console.log('📊 Progress update:', data);
+            updateProgress(data);
+        });
+        
+        socket.on('result', function(data) {
+            console.log('✅ Analysis result:', data);
+            handleAnalysisResult(data);
+        });
+        
+        socket.on('error', function(data) {
+            console.log('❌ Analysis error:', data);
+            handleAnalysisError(data);
+        });
+        
+        // Progressive Analysis Form Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const progressiveForm = document.getElementById('progressive-analysis-form');
+            if (progressiveForm) {
+                progressiveForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    startProgressiveAnalysis();
+                });
+            }
+        });
+        
+        function startProgressiveAnalysis() {
+            const shoeQuery = document.getElementById('progressive_shoe_query').value;
+            const size = document.getElementById('progressive_shoe_size').value;
+            
+            if (!shoeQuery) {
+                alert('Please enter a shoe name or SKU');
+                return;
+            }
+            
+            // Show progress container
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('progress-text').textContent = 'Starting analysis...';
+            document.getElementById('progress-messages').innerHTML = '';
+            
+            // Disable form
+            document.getElementById('progressive-analyze-btn').disabled = true;
+            document.getElementById('progressive-analyze-btn').textContent = '🔄 Analyzing...';
+            
+            // Send analysis request
+            socket.emit('analyze_shoe_progressive', {
+                shoe_query: shoeQuery,
+                size: size
+            });
+        }
+        
+        function updateProgress(data) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const progressMessages = document.getElementById('progress-messages');
+            
+            // Update progress bar
+            if (data.progress_percentage) {
+                progressFill.style.width = data.progress_percentage + '%';
+            }
+            
+            // Update progress text
+            progressText.textContent = data.message;
+            
+            // Add progress message
+            const messageDiv = document.createElement('div');
+            messageDiv.style.marginBottom = '5px';
+            messageDiv.style.padding = '5px';
+            messageDiv.style.borderRadius = '3px';
+            messageDiv.style.backgroundColor = '#e9ecef';
+            messageDiv.innerHTML = `<strong>${data.step}</strong> ${data.message}`;
+            progressMessages.appendChild(messageDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
+        function handleAnalysisResult(data) {
+            // Re-enable form
+            document.getElementById('progressive-analyze-btn').disabled = false;
+            document.getElementById('progressive-analyze-btn').textContent = '🚀 Start Progressive Analysis';
+            
+            // Show success message
+            const progressText = document.getElementById('progress-text');
+            progressText.textContent = '✅ Analysis completed successfully!';
+            progressText.style.color = '#28a745';
+            
+            // Create result display
+            const progressMessages = document.getElementById('progress-messages');
+            const resultDiv = document.createElement('div');
+            resultDiv.style.marginTop = '15px';
+            resultDiv.style.padding = '15px';
+            resultDiv.style.backgroundColor = '#d4edda';
+            resultDiv.style.border = '1px solid #c3e6cb';
+            resultDiv.style.borderRadius = '5px';
+            resultDiv.style.color = '#155724';
+            
+            if (data.success) {
+                resultDiv.innerHTML = `
+                    <h4>🎯 Analysis Complete</h4>
+                    <p><strong>Query:</strong> ${data.query} (Size: ${data.size})</p>
+                    <p><strong>Processing Time:</strong> ${data.processing_time ? data.processing_time.toFixed(2) : 'N/A'}s</p>
+                    <p><strong>Status:</strong> ✅ Success</p>
+                    ${data.final_recommendation && data.final_recommendation.recommendation ? 
+                        `<p><strong>Recommendation:</strong> ${data.final_recommendation.recommendation}</p>` : ''}
+                    <button onclick="window.location.href='/advanced_results'" style="background: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                        📋 View All Results
+                    </button>
+                `;
+            } else {
+                resultDiv.style.backgroundColor = '#f8d7da';
+                resultDiv.style.border = '1px solid #f5c6cb';
+                resultDiv.style.color = '#721c24';
+                resultDiv.innerHTML = `
+                    <h4>❌ Analysis Failed</h4>
+                    <p><strong>Error:</strong> ${data.errors ? data.errors.join(', ') : 'Unknown error'}</p>
+                `;
+            }
+            
+            progressMessages.appendChild(resultDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
+        function handleAnalysisError(data) {
+            // Re-enable form
+            document.getElementById('progressive-analyze-btn').disabled = false;
+            document.getElementById('progressive-analyze-btn').textContent = '🚀 Start Progressive Analysis';
+            
+            // Show error message
+            const progressText = document.getElementById('progress-text');
+            progressText.textContent = '❌ Analysis failed';
+            progressText.style.color = '#dc3545';
+            
+            // Add error message
+            const progressMessages = document.getElementById('progress-messages');
+            const errorDiv = document.createElement('div');
+            errorDiv.style.marginTop = '15px';
+            errorDiv.style.padding = '15px';
+            errorDiv.style.backgroundColor = '#f8d7da';
+            errorDiv.style.border = '1px solid #f5c6cb';
+            errorDiv.style.borderRadius = '5px';
+            errorDiv.style.color = '#721c24';
+            errorDiv.innerHTML = `<h4>❌ Error</h4><p>${data.message || 'Unknown error occurred'}</p>`;
+            
+            progressMessages.appendChild(errorDiv);
+            progressMessages.scrollTop = progressMessages.scrollHeight;
+        }
+        
+        // Token refresh functionality
+        function refreshToken() {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            
+            // Show loading state
+            button.innerHTML = '🔄 Refreshing...';
+            button.disabled = true;
+            
+            fetch('/refresh-token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    button.innerHTML = '✅ Refreshed!';
+                    button.style.background = '#28a745';
+                    
+                    // Show success notification
+                    showNotification('Token refreshed successfully!', 'success');
+                    
+                    // Reload page after 2 seconds to show updated token info
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    // Show error message
+                    button.innerHTML = '❌ Failed';
+                    button.style.background = '#dc3545';
+                    
+                    // Show error notification
+                    showNotification(data.message || 'Token refresh failed', 'error');
+                    
+                    // Reset button after 3 seconds
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.style.background = '#17a2b8';
+                        button.disabled = false;
+                    }, 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Token refresh error:', error);
+                button.innerHTML = '❌ Error';
+                button.style.background = '#dc3545';
+                
+                showNotification('Network error during token refresh', 'error');
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.style.background = '#17a2b8';
+                    button.disabled = false;
+                }, 3000);
+            });
+        }
+        
+        // Notification system
+        function showNotification(message, type) {
+            // Remove existing notifications
+            const existing = document.querySelector('.notification');
+            if (existing) {
+                existing.remove();
+            }
+            
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 5px;
+                color: white;
+                font-weight: bold;
+                z-index: 1000;
+                max-width: 300px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            `;
+            
+            if (type === 'success') {
+                notification.style.background = '#28a745';
+            } else if (type === 'error') {
+                notification.style.background = '#dc3545';
+            } else {
+                notification.style.background = '#17a2b8';
+            }
+            
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
         console.log('WebSocket initialization complete');
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
@@ -856,6 +1154,10 @@ HTML_TEMPLATE = """
                 </div>
             {% endif %}
             <div style="margin: 10px 0;">
+                <button onclick="refreshToken()" 
+                   style="background: #17a2b8; color: white; padding: 8px 16px; border: none; border-radius: 4px; margin-right: 10px; cursor: pointer;">
+                    🔄 Refresh Token
+                </button>
                 <a href="/auth/reset" onclick="return confirm('This will clear your authentication. Are you sure?')" 
                    style="background: #ffc107; color: #212529; padding: 8px 16px; text-decoration: none; border-radius: 4px; margin-right: 10px;">
                     🔄 Reset Authentication
@@ -4105,6 +4407,115 @@ def handle_request_output(data):
                 'status': 'running' if script_id in running_processes else 'completed'
             })
 
+@socketio.on('analyze_shoe_progressive')
+def handle_progressive_analysis(data):
+    """Handle progressive shoe analysis with real-time updates via WebSocket"""
+    shoe_query = data.get('shoe_query', '').strip()
+    size = data.get('size', '10').strip()
+    
+    if not shoe_query:
+        emit('error', {'message': 'Please enter a shoe name or SKU'})
+        return
+    
+    try:
+        # Import progressive loading analyzer
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from progressive_loading_analyzer import ProgressiveLoadingAnalyzer
+        
+        def progress_callback(update):
+            """Send progress updates via WebSocket"""
+            emit('progress', update)
+        
+        analyzer = ProgressiveLoadingAnalyzer(progress_callback=progress_callback, max_workers=3)
+        result = analyzer.analyze_shoe_with_progressive_loading(shoe_query, size)
+        
+        # Send final result
+        emit('result', result)
+        
+    except Exception as e:
+        emit('error', {'message': f'Analysis failed: {str(e)}'})
+
+@app.route('/refresh-token', methods=['POST'])
+def refresh_token_endpoint():
+    """Web endpoint to manually refresh the StockX token"""
+    try:
+        print("🔄 Manual token refresh requested via web interface")
+        
+        # Check if we can refresh
+        if not can_refresh_token():
+            return jsonify({
+                'success': False,
+                'message': 'No refresh token available - full authentication required',
+                'action': 'authenticate'
+            }), 400
+        
+        # Attempt refresh
+        if refresh_access_token():
+            # Verify the refresh worked
+            is_auth, error_msg, action = robust_authentication_check()
+            if is_auth:
+                return jsonify({
+                    'success': True,
+                    'message': 'Token refreshed successfully!',
+                    'action': 'success'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'Token refresh completed but verification failed: {error_msg}',
+                    'action': action
+                }), 400
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Token refresh failed - check logs for details',
+                'action': 'authenticate'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error in token refresh endpoint: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Token refresh error: {str(e)}',
+            'action': 'error'
+        }), 500
+
+@app.route('/token-status')
+def token_status():
+    """Get current token status and information"""
+    try:
+        if not os.path.exists(TOKEN_FILE):
+            return jsonify({
+                'has_token': False,
+                'message': 'No token file found',
+                'action': 'authenticate'
+            })
+        
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        
+        # Check if token is valid
+        is_auth, error_msg, action = robust_authentication_check()
+        
+        token_info = {
+            'has_token': True,
+            'is_valid': is_auth,
+            'has_refresh_token': 'refresh_token' in tokens,
+            'expires_in': tokens.get('expires_in', 'Unknown'),
+            'token_type': tokens.get('token_type', 'Bearer'),
+            'last_refreshed': tokens.get('refreshed_at', 'Unknown'),
+            'error_message': error_msg if not is_auth else None,
+            'recommended_action': action
+        }
+        
+        return jsonify(token_info)
+        
+    except Exception as e:
+        return jsonify({
+            'has_token': False,
+            'message': f'Error reading token: {str(e)}',
+            'action': 'error'
+        }), 500
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory('static', 'greengoatlogoiphone.png', mimetype='image/png')

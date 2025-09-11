@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtualenv
+venv/
+.venv/
+
+# Local data and tokens
+tokens_full_scope.json
+tokens*.json
+# Store tokens in hidden home dir on Replit/local; never commit
+/.stockx/
+
+# Uploads and outputs
+uploads/
+advanced_analysis_results/
+# Only ignore our generated CSVs, not all CSVs
+stockx_enhanced_*.csv
+*_Sheet1.csv
+*.log
+
+# Replit artifacts
+.replit
+replit.nix
