@@ -1103,7 +1103,7 @@ class InventoryStockXAnalyzer:
             return 0.0
     
     def calculate_price_offer(self, item: InventoryItem) -> Tuple[Optional[float], str]:
-        """Calculate price offer based on volume and pricing rules (matching advanced shoe analyzer logic)"""
+        """Calculate price offer ensuring 20% margin vs GOAT absolute lowest, with volume-specific rules"""
         try:
             # Extract numeric values
             stockx_bid = self._parse_price(item.stockx_bid) if item.stockx_bid else None
@@ -1116,6 +1116,7 @@ class InventoryStockXAnalyzer:
             # Determine GOAT absolute lowest (including both consigned and ship-to-verify)
             valid_goat_prices = [p for p in [goat_consigned, goat_ship_to_verify] if p is not None and p > 0]
             goat_absolute_lowest = min(valid_goat_prices) if valid_goat_prices else None
+            target_max_payment = goat_absolute_lowest * 0.8 if goat_absolute_lowest else None
             
             # Get weekly volume
             weekly_volume = item.weekly_volume or 0.0
@@ -1126,63 +1127,68 @@ class InventoryStockXAnalyzer:
             print(f"   💵 StockX Bid: ${stockx_bid or 'N/A'}")
             print(f"   💵 StockX Ask: ${stockx_ask or 'N/A'}")
             print(f"   🐐 GOAT Absolute Lowest: ${goat_absolute_lowest or 'N/A'}")
+            print(f"   🎯 Max Pay for 20% margin (80% of GOAT): ${target_max_payment or 'N/A'}")
             
-            # Apply pricing rules based on your exact requirements
-            if is_high_volume and stockx_bid and goat_absolute_lowest and goat_absolute_lowest > 0:
-                # High volume (≥3/week): Pay StockX bid if bid ≥20% of GOAT lowest ask
-                min_bid_threshold = goat_absolute_lowest * 0.8  # 20% of GOAT ask
-                
-                if stockx_bid >= min_bid_threshold:
-                    offer_price = stockx_bid
-                    reasoning = f"High volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (≥20% of GOAT ask ${goat_absolute_lowest:.2f})"
-                    print(f"   ✅ {reasoning}")
-                    return offer_price, reasoning
-                else:
-                    # Check if bid is 19% or less lower than GOAT ask
-                    percent_diff = ((goat_absolute_lowest - stockx_bid) / goat_absolute_lowest) * 100
-                    if percent_diff <= 19:  # Bid is 19% or less lower than GOAT ask
-                        offer_price = goat_absolute_lowest * 0.8  # 20% lower than GOAT ask
-                        reasoning = f"High volume ({weekly_volume:.1f}/week): Bid only {percent_diff:.1f}% lower than GOAT ask, offer 20% lower = ${offer_price:.2f}"
+            # Apply corrected pricing rules
+            if is_high_volume:
+                # High volume (≥3/week): ensure 20% margin vs GOAT; prefer paying bid if within threshold
+                if goat_absolute_lowest and target_max_payment:
+                    if stockx_bid is not None:
+                        if stockx_bid <= target_max_payment:
+                            offer_price = stockx_bid
+                            reasoning = f"High volume ({weekly_volume:.1f}/week): Bid ${stockx_bid:.2f} ≤ 80% of GOAT ${goat_absolute_lowest:.2f} → offer bid"
+                            print(f"   ✅ {reasoning}")
+                            return offer_price, reasoning
+                        else:
+                            offer_price = target_max_payment
+                            reasoning = f"High volume ({weekly_volume:.1f}/week): Bid ${stockx_bid:.2f} exceeds 80% of GOAT ${goat_absolute_lowest:.2f} → offer ${offer_price:.2f} (GOAT -20%)"
+                            print(f"   ✅ {reasoning}")
+                            return offer_price, reasoning
+                    else:
+                        # No bid; still enforce 20% margin using GOAT
+                        offer_price = target_max_payment
+                        reasoning = f"High volume ({weekly_volume:.1f}/week): No bid, offer ${offer_price:.2f} (GOAT ${goat_absolute_lowest:.2f} -20%)"
                         print(f"   ✅ {reasoning}")
                         return offer_price, reasoning
-                    else:
-                        reasoning = f"High volume but bid too low: ${stockx_bid:.2f} is {percent_diff:.1f}% lower than GOAT ask ${goat_absolute_lowest:.2f} (>19%)"
-                        print(f"   ❌ {reasoning}")
-                        return None, reasoning
-                        
-            elif is_high_volume and stockx_bid:
-                # High volume but no GOAT data - pay StockX bid
-                offer_price = stockx_bid
-                reasoning = f"High volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (no GOAT data)"
-                print(f"   ✅ {reasoning}")
-                return offer_price, reasoning
-                
-            elif not is_high_volume and stockx_bid and goat_absolute_lowest and goat_absolute_lowest > 0:
-                # Low volume (≤2/week): Pay bid as long as it is ≥20% of GOAT ask
-                min_bid_threshold = goat_absolute_lowest * 0.8  # 20% of GOAT ask
-                
-                if stockx_bid >= min_bid_threshold:
-                    offer_price = stockx_bid
-                    reasoning = f"Low volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (≥20% of GOAT ask ${goat_absolute_lowest:.2f})"
-                    print(f"   ✅ {reasoning}")
-                    return offer_price, reasoning
                 else:
-                    reasoning = f"Low volume: Bid ${stockx_bid:.2f} < 20% of GOAT ask ${goat_absolute_lowest:.2f}"
+                    # No GOAT data; fallback to bid if available
+                    if stockx_bid is not None:
+                        offer_price = stockx_bid
+                        reasoning = f"High volume ({weekly_volume:.1f}/week): No GOAT data, offer StockX bid ${offer_price:.2f}"
+                        print(f"   ✅ {reasoning}")
+                        return offer_price, reasoning
+                    reasoning = f"High volume ({weekly_volume:.1f}/week): No GOAT or bid data"
                     print(f"   ❌ {reasoning}")
                     return None, reasoning
-                    
-            elif not is_high_volume and stockx_bid:
-                # Low volume but no GOAT data - pay StockX bid
-                offer_price = stockx_bid
-                reasoning = f"Low volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (no GOAT data)"
-                print(f"   ✅ {reasoning}")
-                return offer_price, reasoning
-                
             else:
-                # No pricing data available
-                reasoning = f"{'High' if is_high_volume else 'Low'} volume ({weekly_volume:.1f}/week): No pricing data available"
-                print(f"   ❌ {reasoning}")
-                return None, reasoning
+                # Low volume (≤2/week): always make an offer; ensure 20% margin when GOAT available
+                if goat_absolute_lowest and target_max_payment:
+                    if stockx_bid is not None:
+                        if stockx_bid <= target_max_payment:
+                            offer_price = stockx_bid
+                            reasoning = f"Low volume ({weekly_volume:.1f}/week): Bid ${stockx_bid:.2f} ≤ 80% of GOAT ${goat_absolute_lowest:.2f} → offer bid"
+                            print(f"   ✅ {reasoning}")
+                            return offer_price, reasoning
+                        else:
+                            offer_price = target_max_payment
+                            reasoning = f"Low volume ({weekly_volume:.1f}/week): Bid ${stockx_bid:.2f} exceeds 80% of GOAT ${goat_absolute_lowest:.2f} → offer ${offer_price:.2f} (GOAT -20%)"
+                            print(f"   ✅ {reasoning}")
+                            return offer_price, reasoning
+                    else:
+                        offer_price = target_max_payment
+                        reasoning = f"Low volume ({weekly_volume:.1f}/week): No bid, offer ${offer_price:.2f} (GOAT ${goat_absolute_lowest:.2f} -20%)"
+                        print(f"   ✅ {reasoning}")
+                        return offer_price, reasoning
+                else:
+                    # No GOAT data; if bid exists, offer bid; otherwise cannot compute
+                    if stockx_bid is not None:
+                        offer_price = stockx_bid
+                        reasoning = f"Low volume ({weekly_volume:.1f}/week): No GOAT data, offer StockX bid ${offer_price:.2f}"
+                        print(f"   ✅ {reasoning}")
+                        return offer_price, reasoning
+                    reasoning = f"Low volume ({weekly_volume:.1f}/week): No GOAT or bid data"
+                    print(f"   ❌ {reasoning}")
+                    return None, reasoning
                     
         except Exception as e:
             reasoning = f"Error calculating price offer: {str(e)}"
@@ -1545,12 +1551,6 @@ class InventoryStockXAnalyzer:
             weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
             item.weekly_volume = weekly_volume
             
-            # Calculate price offer using advanced pricing logic
-            print(f"   💰 Calculating price offer...", flush=True)
-            offer_price, offer_reasoning = self.calculate_price_offer(item)
-            item.price_offer = f"${offer_price:.2f}" if offer_price else None
-            item.offer_reasoning = offer_reasoning
-            
             # Extract pricing data
             bid_amount = market_data.get('highestBidAmount')
             ask_amount = market_data.get('lowestAskAmount')
@@ -1572,31 +1572,9 @@ class InventoryStockXAnalyzer:
             if url_key:
                 stockx_url = f"https://stockx.com/{url_key}"
 
-            # Include Alias data in result
-            result = {
-                'bid': bid_amount,
-                'ask': ask_amount,
-                'lowest_consigned': alias_data.get('lowest_consigned') if alias_data else None,
-                'last_consigned_price': alias_data.get('last_consigned_price') if alias_data else None,
-                'last_consigned_date': alias_data.get('last_consigned_date') if alias_data else None,
-                'lowest_with_you': alias_data.get('lowest_with_you') if alias_data else None,
-                'last_with_you_price': alias_data.get('last_with_you_price') if alias_data else None,
-                'last_with_you_date': alias_data.get('last_with_you_date') if alias_data else None,
-                'consignment_price': alias_data.get('consignment_price') if alias_data else None,
-                'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
-                'weekly_volume': weekly_volume,
-                'price_offer': offer_price,
-                'offer_reasoning': offer_reasoning,
-                'sku': best_product.get('style_id', ''),
-                'url': stockx_url,
-                'size': str(variant_size),
-                'shoe_name': best_product['title'],
-                'bid_profit': bid_profit,
-                'ask_profit': ask_profit
-            }
-
-            item.stockx_bid = f"${result['bid']}" if result['bid'] else None
-            item.stockx_ask = f"${result['ask']}" if result['ask'] else None
+            # Populate item with StockX market data
+            item.stockx_bid = f"${bid_amount}" if bid_amount else None
+            item.stockx_ask = f"${ask_amount}" if ask_amount else None
             # Add Alias data to item
             if alias_data:
                 item.lowest_consigned = f"${alias_data['lowest_consigned']:.2f}" if alias_data.get('lowest_consigned') else None
@@ -1616,12 +1594,41 @@ class InventoryStockXAnalyzer:
                 item.last_with_you_date = None
                 item.consignment_price = None
                 item.ship_to_verify_price = None
-            item.stockx_sku = result['sku']
-            item.stockx_url = result['url']
-            item.stockx_size = result['size']
-            item.stockx_shoe_name = result['shoe_name']
-            item.bid_profit = f"${result['bid_profit']:.2f}" if result['bid_profit'] is not None else None
-            item.ask_profit = f"${result['ask_profit']:.2f}" if result['ask_profit'] is not None else None
+            item.stockx_sku = best_product.get('style_id', '')
+            item.stockx_url = stockx_url
+            item.stockx_size = str(variant_size)
+            item.stockx_shoe_name = best_product['title']
+            item.bid_profit = f"${bid_profit:.2f}" if bid_profit is not None else None
+            item.ask_profit = f"${ask_profit:.2f}" if ask_profit is not None else None
+
+            # Now that item has StockX and GOAT data, calculate price offer
+            print(f"   💰 Calculating price offer...", flush=True)
+            offer_price, offer_reasoning = self.calculate_price_offer(item)
+            item.price_offer = f"${offer_price:.2f}" if offer_price is not None else None
+            item.offer_reasoning = offer_reasoning
+
+            # Build result for caching and logs (includes offer and volume)
+            result = {
+                'bid': bid_amount,
+                'ask': ask_amount,
+                'lowest_consigned': alias_data.get('lowest_consigned') if alias_data else None,
+                'last_consigned_price': alias_data.get('last_consigned_price') if alias_data else None,
+                'last_consigned_date': alias_data.get('last_consigned_date') if alias_data else None,
+                'lowest_with_you': alias_data.get('lowest_with_you') if alias_data else None,
+                'last_with_you_price': alias_data.get('last_with_you_price') if alias_data else None,
+                'last_with_you_date': alias_data.get('last_with_you_date') if alias_data else None,
+                'consignment_price': alias_data.get('consignment_price') if alias_data else None,
+                'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
+                'weekly_volume': weekly_volume,
+                'price_offer': offer_price,
+                'offer_reasoning': offer_reasoning,
+                'sku': item.stockx_sku,
+                'url': item.stockx_url,
+                'size': item.stockx_size,
+                'shoe_name': item.stockx_shoe_name,
+                'bid_profit': bid_profit,
+                'ask_profit': ask_profit
+            }
 
             self.cache[cache_key] = result
 
