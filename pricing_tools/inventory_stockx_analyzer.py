@@ -1085,13 +1085,22 @@ class InventoryStockXAnalyzer:
             return None
     
     def calculate_weekly_volume(self, shoe_name: str, size: str) -> float:
-        """Calculate last-7-days sales count on Alias for the exact size (not velocity)."""
+        """Calculate last-7-days sales count on Alias for the exact size (not velocity).
+        Uses a robust search similar to advanced analyzer: try name, then SKU normalization, then fallback.
+        """
         try:
             print(f"   📊 Calculating weekly volume for: {shoe_name} (Size {size})")
 
-            # Build search terms and find catalog match
+            # Build search terms and find catalog match (name first)
             search_terms = self.volume_analyzer._extract_search_terms(shoe_name)
             catalog_match = self.volume_analyzer.search_catalog_improved(search_terms)
+            
+            # If not found and looks like SKU, try normalized SKU directly
+            if not catalog_match and self._looks_like_sku(shoe_name):
+                normalized_sku = self._normalize_sku_for_search(shoe_name)
+                catalog_match = self.volume_analyzer.search_catalog_improved([normalized_sku])
+                if not catalog_match and '-' in normalized_sku:
+                    catalog_match = self.volume_analyzer.search_catalog_improved([normalized_sku.replace('-', ' ')])
             if not catalog_match:
                 print(f"   ⚠️ No Alias catalog match for volume")
                 return 0.0
@@ -1587,6 +1596,26 @@ class InventoryStockXAnalyzer:
             alias_data = self.get_alias_pricing_data(item.shoe_name, str(variant_size))
             if not alias_data:
                 alias_data = self.get_alias_pricing_data(best_product['title'], str(variant_size))
+            
+            # If Alias SKU doesn't match StockX SKU, try searching Alias by StockX SKU to correct catalog
+            try:
+                stockx_sku_for_check = best_product.get('style_id', '') or ''
+                alias_sku_found = alias_data.get('alias_sku', '') if alias_data else ''
+                if stockx_sku_for_check and alias_sku_found:
+                    stockx_norm = re.sub(r'[-\s]', '', stockx_sku_for_check.upper())
+                    alias_norm = re.sub(r'[-\s]', '', alias_sku_found.upper())
+                else:
+                    stockx_norm = ''
+                    alias_norm = ''
+                if stockx_sku_for_check and (not alias_data or not alias_norm or stockx_norm != alias_norm):
+                    print(f"   🔄 Alias SKU correction: trying StockX SKU {stockx_sku_for_check}")
+                    alias_by_sku = self.get_alias_pricing_data(stockx_sku_for_check, str(variant_size))
+                    # Prefer the SKU-based alias data if it has a catalog_id
+                    if alias_by_sku and alias_by_sku.get('catalog_id'):
+                        alias_data = alias_by_sku
+                        print(f"   ✅ Alias catalog corrected via SKU")
+            except Exception:
+                pass
             
             # Calculate weekly volume (last 7 days count) and previous method (velocity*7)
             print(f"   📊 Calculating weekly volume...", flush=True)
