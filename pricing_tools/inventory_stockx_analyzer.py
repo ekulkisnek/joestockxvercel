@@ -1073,6 +1073,7 @@ class InventoryStockXAnalyzer:
                 
                 # Include SKU for verification
                 'alias_sku': alias_sku,
+                'catalog_id': catalog_id,
             }
             
             print(f"   💰 Alias data: Ship ${result['ship_to_verify_price'] or 'N/A'} | Consigned ${result['consignment_price'] or 'N/A'}")
@@ -1589,7 +1590,33 @@ class InventoryStockXAnalyzer:
             
             # Calculate weekly volume (last 7 days count) and previous method (velocity*7)
             print(f"   📊 Calculating weekly volume...", flush=True)
-            weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
+            # Prefer using Alias catalog_id when available to avoid mismatches
+            alias_catalog_id = alias_data.get('catalog_id') if alias_data else None
+            if alias_catalog_id:
+                # Use exact catalog and size to fetch sales and count last 7 days
+                try:
+                    size_float_for_volume = float(str(variant_size).replace('Y', '').replace('W', '').replace('C', ''))
+                except Exception:
+                    size_float_for_volume = None
+                weekly_volume = 0.0
+                if size_float_for_volume is not None:
+                    sales_data_exact = self.volume_analyzer._get_sales_for_size(alias_catalog_id, size_float_for_volume)
+                    if sales_data_exact:
+                        now_ts = datetime.now(timezone.utc).timestamp()
+                        one_week_ago_ts = now_ts - 7 * 24 * 3600
+                        for sale in sales_data_exact:
+                            date_str = sale.get('purchased_at')
+                            if not date_str:
+                                continue
+                            try:
+                                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00')) if 'T' in date_str else datetime.fromisoformat(date_str)
+                                if dt.timestamp() >= one_week_ago_ts:
+                                    weekly_volume += 1
+                            except Exception:
+                                continue
+                weekly_volume = float(weekly_volume)
+            else:
+                weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
             item.weekly_volume = weekly_volume
             # Previous method for transparency
             try:
@@ -1675,6 +1702,7 @@ class InventoryStockXAnalyzer:
                 'last_with_you_date': alias_data.get('last_with_you_date') if alias_data else None,
                 'consignment_price': alias_data.get('consignment_price') if alias_data else None,
                 'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
+                'catalog_id': alias_data.get('catalog_id') if alias_data else None,
                 'weekly_volume': weekly_volume,
                 'weekly_volume_prev': item.weekly_volume_prev,
                 'price_offer': offer_price,
