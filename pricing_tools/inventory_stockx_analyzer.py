@@ -78,7 +78,8 @@ class InventoryItem:
         self.ask_profit = None
         
         # Volume and pricing data
-        self.weekly_volume = None
+        self.weekly_volume = None  # Last 7 days count (current)
+        self.weekly_volume_prev = None  # Previous estimate (velocity*7)
         self.price_offer = None
         self.offer_reasoning = None
     
@@ -1586,10 +1587,16 @@ class InventoryStockXAnalyzer:
             if not alias_data:
                 alias_data = self.get_alias_pricing_data(best_product['title'], str(variant_size))
             
-            # Calculate weekly volume
+            # Calculate weekly volume (last 7 days count) and previous method (velocity*7)
             print(f"   📊 Calculating weekly volume...", flush=True)
             weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
             item.weekly_volume = weekly_volume
+            # Previous method for transparency
+            try:
+                prev_vol = self.volume_analyzer.get_weekly_volume(item.shoe_name, str(variant_size))
+                item.weekly_volume_prev = prev_vol.get('weekly_volume') if isinstance(prev_vol, dict) else None
+            except Exception:
+                item.weekly_volume_prev = None
             
             # Extract pricing data
             bid_amount = market_data.get('highestBidAmount')
@@ -1669,6 +1676,7 @@ class InventoryStockXAnalyzer:
                 'consignment_price': alias_data.get('consignment_price') if alias_data else None,
                 'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
                 'weekly_volume': weekly_volume,
+                'weekly_volume_prev': item.weekly_volume_prev,
                 'price_offer': offer_price,
                 'offer_reasoning': offer_reasoning,
                 'sku': item.stockx_sku,
@@ -1898,7 +1906,7 @@ class InventoryStockXAnalyzer:
             'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
             'consignment_price', 'ship_to_verify_price',
-            'weekly_volume', 'price_offer', 'offer_reasoning',
+            'weekly_volume', 'weekly_volume_prev', 'price_offer', 'offer_reasoning',
             # Bulk advanced-style simple metrics for spreadsheet use
             'final_recommendation',
             'price_offer_numeric',
@@ -2027,6 +2035,7 @@ class InventoryStockXAnalyzer:
                     'consignment_price': item.consignment_price or '',
                     'ship_to_verify_price': item.ship_to_verify_price or '',
                     'weekly_volume': f"{item.weekly_volume:.2f}" if item.weekly_volume is not None else '',
+                    'weekly_volume_prev': f"{item.weekly_volume_prev:.2f}" if item.weekly_volume_prev is not None else '',
                     'price_offer': item.price_offer or '',
                     'offer_reasoning': item.offer_reasoning or '',
                     'final_recommendation': final_reco,
