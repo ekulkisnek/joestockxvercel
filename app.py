@@ -116,6 +116,76 @@ auth_state = {
     'token_info': None
 }
 
+def ensure_token_available():
+    """Ensure a usable token file exists by migrating or refreshing via env.
+    Returns True if a token becomes available, else False.
+    """
+    try:
+        # Ensure directory for token file exists
+        try:
+            token_dir = os.path.dirname(TOKEN_FILE)
+            if token_dir:
+                os.makedirs(token_dir, exist_ok=True)
+        except Exception:
+            pass
+
+        # If token already exists
+        if os.path.exists(TOKEN_FILE):
+            return True
+
+        # Try legacy locations migration
+        legacy_candidates = [
+            os.path.join(os.getcwd(), 'tokens_full_scope.json'),
+            os.path.join(os.path.dirname(os.getcwd()), 'tokens_full_scope.json')
+        ]
+        for candidate in legacy_candidates:
+            try:
+                if os.path.exists(candidate) and os.path.getsize(candidate) > 0:
+                    with open(candidate, 'r') as src:
+                        data = src.read()
+                    with open(TOKEN_FILE, 'w') as dst:
+                        dst.write(data)
+                    print(f"🔄 Migrated token file from legacy path: {candidate} → {TOKEN_FILE}")
+                    return True
+            except Exception as e:
+                print(f"⚠️ Token migration from {candidate} failed: {e}")
+
+        # Try environment-provided refresh token
+        env_refresh = os.getenv('STOCKX_REFRESH_TOKEN')
+        if env_refresh:
+            try:
+                print("🔄 Attempting token creation via STOCKX_REFRESH_TOKEN env var...")
+                data = {
+                    'grant_type': 'refresh_token',
+                    'refresh_token': env_refresh,
+                    'client_id': STOCKX_CLIENT_ID,
+                    'client_secret': STOCKX_CLIENT_SECRET,
+                    'audience': 'gateway.stockx.com'
+                }
+                response = requests.post(
+                    'https://accounts.stockx.com/oauth/token',
+                    data=data,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                )
+                if response.status_code == 200:
+                    tokens = response.json()
+                    if 'refresh_token' not in tokens:
+                        tokens['refresh_token'] = env_refresh
+                    tokens['refreshed_at'] = time.time()
+                    with open(TOKEN_FILE, 'w') as f:
+                        json.dump(tokens, f, indent=2)
+                    print("✅ Created new token file from env refresh token")
+                    return True
+                else:
+                    print(f"❌ Env refresh token attempt failed: {response.status_code}")
+            except Exception as e:
+                print(f"❌ Error creating token from env refresh token: {e}")
+
+        return False
+    except Exception as e:
+        print(f"❌ ensure_token_available error: {e}")
+        return False
+
 def get_replit_url():
     """Get the Replit app URL for OAuth callback with improved detection"""
     
@@ -4533,6 +4603,14 @@ if __name__ == "__main__":
         print(f"📱 Access at: http://0.0.0.0:{port}")
         print("🔄 Real-time updates via WebSocket")
         print("=" * 50)
+        # Ensure a token is present or automatically recovered
+        try:
+            if ensure_token_available():
+                print("✅ Token file available")
+            else:
+                print("⚠️ No token available at startup - use /auth/start or /refresh-token when ready")
+        except Exception as e:
+            print(f"⚠️ Token ensure step warning: {e}")
         try:
             start_enhanced_token_refresh_thread()
         except Exception as e:
