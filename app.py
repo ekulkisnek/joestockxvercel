@@ -1211,6 +1211,35 @@ HTML_TEMPLATE = """
         </div>
     </div>
     
+    <div class="search-section">
+        <h2>📚 Advanced Multi‑Shoe Analysis</h2>
+        <p>Upload a sheet or paste a list to run the same advanced logic across multiple shoes.</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
+                <h4>📁 Upload CSV</h4>
+                <form action="/advanced_multi_upload" method="post" enctype="multipart/form-data" style="margin: 10px 0;">
+                    <label for="advanced_multi_upload">Upload CSV with shoe and size columns:</label><br>
+                    <input type="file" name="file" id="advanced_multi_upload" accept=".csv" style="margin: 5px 0;"><br>
+                    <button type="submit" class="upload-button">Run Advanced Multi‑Shoe</button>
+                </form>
+                <p><small>Flexible column detection: name/SKU, size, price, condition.</small></p>
+            </div>
+            <div style="border: 1px solid #ddd; padding: 12px; border-radius: 6px;">
+                <h4>📋 Paste List</h4>
+                <form action="/advanced_multi_paste" method="post" style="margin: 10px 0;">
+                    <label for="advanced_multi_inventory_text">Paste your list:</label><br>
+                    <textarea name="advanced_multi_inventory_text" id="advanced_multi_inventory_text" rows="8" cols="60" 
+                             placeholder="DQ8426 067 - sz12 x2
+Jordan 1 Retro High OG 'Royal Reimagined' - sz10 ($235)
+DD1391 100 - sz10.5" 
+                             style="margin: 5px 0; width: 100%; font-family: monospace;"></textarea><br>
+                    <button type="submit" class="upload-button">Run Advanced Multi‑Shoe</button>
+                </form>
+                <p><small>SKU and name formats supported; sizes like sz10, 10W, 5Y, etc.</small></p>
+            </div>
+        </div>
+    </div>
+    
     <div class="auth-section">
         <h2>🔐 Authentication Status</h2>
         {% if authenticated %}
@@ -2117,6 +2146,104 @@ def advanced_results():
         flash(f'Error loading results: {str(e)}')
         return redirect(url_for('index'))
 
+@app.route('/advanced_multi_upload', methods=['POST'])
+def advanced_multi_upload():
+    """Upload CSV and run advanced analysis for multiple shoes"""
+    if 'file' not in request.files:
+        flash('No file selected')
+        return redirect(url_for('index'))
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('index'))
+
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, _ = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ MULTI ANALYSIS BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+
+    try:
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        # Parse items using inventory analyzer (for normalization and extraction)
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from inventory_stockx_analyzer import InventoryStockXAnalyzer
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+
+        inv = InventoryStockXAnalyzer()
+        items = inv.parse_csv_flexible(filepath)
+
+        if not items:
+            flash('❌ No valid rows detected in CSV')
+            return redirect(url_for('index'))
+
+        analyzer = AdvancedShoeAnalyzer()
+        results = []
+        for item in items:
+            shoe_query = item.shoe_name
+            size = item.size or '10'
+            try:
+                res = analyzer.analyze_shoe_with_pricing_logic(shoe_query, size)
+                results.append(res)
+            except Exception as e:
+                results.append({'success': False, 'query': shoe_query, 'size': size, 'errors': [str(e)], 'timestamp': datetime.now().isoformat()})
+
+        return render_advanced_multi_analysis(results)
+
+    except Exception as e:
+        flash(f'Advanced multi analysis error: {str(e)}')
+        return redirect(url_for('index'))
+
+@app.route('/advanced_multi_paste', methods=['POST'])
+def advanced_multi_paste():
+    """Paste list and run advanced analysis for multiple shoes"""
+    text = request.form.get('advanced_multi_inventory_text', '').strip()
+    if not text:
+        flash('No list provided')
+        return redirect(url_for('index'))
+
+    # VERIFY AUTHENTICATION BEFORE PROCESSING
+    is_auth, error_msg, _ = robust_authentication_check()
+    if not is_auth:
+        flash(f'❌ MULTI ANALYSIS BLOCKED: {error_msg or "Authentication required"}. Please authenticate first.')
+        return redirect(url_for('index'))
+
+    try:
+        # Use inventory analyzer's pasted list parser
+        sys.path.append(os.path.join(os.getcwd(), 'pricing_tools'))
+        from inventory_stockx_analyzer import InventoryStockXAnalyzer
+        from advanced_shoe_analyzer import AdvancedShoeAnalyzer
+
+        inv = InventoryStockXAnalyzer()
+        items = inv.parse_pasted_list(text)
+
+        if not items:
+            flash('❌ No valid items detected in pasted list')
+            return redirect(url_for('index'))
+
+        analyzer = AdvancedShoeAnalyzer()
+        results = []
+        for item in items:
+            shoe_query = item.shoe_name
+            size = item.size or '10'
+            try:
+                res = analyzer.analyze_shoe_with_pricing_logic(shoe_query, size)
+                results.append(res)
+            except Exception as e:
+                results.append({'success': False, 'query': shoe_query, 'size': size, 'errors': [str(e)], 'timestamp': datetime.now().isoformat()})
+
+        return render_advanced_multi_analysis(results)
+
+    except Exception as e:
+        flash(f'Advanced multi analysis error: {str(e)}')
+        return redirect(url_for('index'))
+
 @app.route('/advanced_result/<timestamp>')
 def view_advanced_result(timestamp):
     """View a specific advanced analysis result"""
@@ -2794,6 +2921,126 @@ def render_advanced_analysis(result: dict) -> str:
                     </div>
                 </div>
             </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def render_advanced_multi_analysis(results: List[dict]) -> str:
+    """Render a dashboard of multiple advanced analyses as summary cards"""
+    def card_for_result(res: dict) -> str:
+        query = res.get('query', 'Unknown')
+        size = res.get('size', 'Unknown')
+        ts = res.get('timestamp', '')
+        success = res.get('success', False)
+        if not success:
+            err = ', '.join(res.get('errors', ['Unknown error']))
+            return f"""
+            <div class="result-card" style="background:#fff; border-left:5px solid #e74c3c; padding:16px; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div class="result-title">{query} - Size {size}</div>
+                        <div class="result-meta">{ts}</div>
+                    </div>
+                    <div class="recommendation-badge badge-no-buy">ERROR</div>
+                </div>
+                <div style="color:#e74c3c;">{err}</div>
+            </div>
+            """
+
+        calc = res.get('calculations', {})
+        rec = res.get('final_recommendation', {})
+        profit = calculate_profit_analysis(res)
+        action = rec.get('action', 'UNKNOWN')
+        price = rec.get('price')
+        badge_class = 'badge-buy' if action == 'BUY' else 'badge-no-buy'
+        badge_text = f"BUY ${price:.2f}" if action == 'BUY' and price else action
+
+        # Key pricing fields
+        stockx_bid = calc.get('step_1_stockx_analysis', {}).get('stockx_bid')
+        stockx_ask = calc.get('step_1_stockx_analysis', {}).get('stockx_ask')
+        alias = calc.get('step_5_alias_comparison', {})
+        goat_abs = alias.get('goat_absolute_lowest')
+        last5 = get_last_5_sales_display(res)
+        goat_last_sale = get_goat_last_sale_info(res)
+
+        return f"""
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">{query} - Size {size}</div>
+                    <div class="result-meta">{ts} | Confidence: {rec.get('confidence','Unknown')}</div>
+                </div>
+                <div class="recommendation-badge {badge_class}">{badge_text}</div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:12px;">
+                <div class="metric">
+                    <div class="metric-label">Final Recommendation</div>
+                    <div style="font-weight:bold;">{rec.get('recommendation','')}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">GOAT Lowest</div>
+                    <div>${goat_abs if goat_abs else 'N/A'}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">StockX Bid / Ask</div>
+                    <div>${stockx_bid or 'N/A'} / ${stockx_ask or 'N/A'}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Profit (GOAT Lowest)</div>
+                    <div>${profit['actual_profit']:.2f} ({profit['profit_percentage']:.1f}%)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Profit (GOAT Consignment)</div>
+                    <div>${profit['consignment_actual_profit']:.2f} ({profit['consignment_profit_percentage']:.1f}%)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Profit (StockX Ask)</div>
+                    <div>${profit['stockx_actual_profit']:.2f} ({profit['stockx_profit_percentage']:.1f}%)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">GOAT Last Sale</div>
+                    <div>{goat_last_sale}</div>
+                </div>
+                <div class="metric" style="grid-column: 1/-1; text-align:left;">
+                    <div class="metric-label">Last 5 Sales</div>
+                    <div>{last5}</div>
+                </div>
+            </div>
+        </div>
+        """
+
+    # Page shell
+    cards_html = "\n".join(card_for_result(r) for r in results)
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>📚 Advanced Multi‑Shoe Analysis</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; margin:0; padding:20px; background:#f0f2f5; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .header {{ background: linear-gradient(135deg, #2c3e50, #34495e); color:#fff; padding:24px; border-radius:12px; margin-bottom:16px; }}
+            .result-card {{ background:#fff; border-radius:10px; padding:16px; margin:12px 0; border-left:5px solid #3498db; }}
+            .result-header {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
+            .result-title {{ font-size:1.2em; font-weight:bold; }}
+            .result-meta {{ color:#666; font-size:0.9em; }}
+            .recommendation-badge {{ padding:6px 12px; border-radius:18px; font-weight:bold; }}
+            .badge-buy {{ background:#27ae60; color:#fff; }}
+            .badge-no-buy {{ background:#e74c3c; color:#fff; }}
+            .metric {{ background:#f8f9fa; padding:12px; border-radius:8px; text-align:center; }}
+            .metric-label {{ font-size:0.8em; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }}
+            .back-link {{ position:fixed; top:20px; right:20px; background:#e74c3c; color:#fff; padding:10px 16px; border-radius:22px; text-decoration:none; font-weight:bold; }}
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-link">← Back</a>
+        <div class="container">
+            <div class="header">
+                <h1>📚 Advanced Multi‑Shoe Analysis</h1>
+                <p>Summary of pricing recommendations, profits, and sales signals for each item.</p>
+            </div>
+            {cards_html}
         </div>
     </body>
     </html>

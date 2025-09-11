@@ -11,7 +11,7 @@ import time
 import sys
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 try:
@@ -1083,21 +1083,53 @@ class InventoryStockXAnalyzer:
             return None
     
     def calculate_weekly_volume(self, shoe_name: str, size: str) -> float:
-        """Calculate weekly sales volume for a shoe using Alias API"""
+        """Calculate last-7-days sales count on Alias for the exact size (not velocity)."""
         try:
             print(f"   📊 Calculating weekly volume for: {shoe_name} (Size {size})")
-            
-            # Get volume data from the volume analyzer
-            volume_data = self.volume_analyzer.get_weekly_volume(shoe_name, size)
-            
-            if volume_data and volume_data.get('weekly_volume') is not None:
-                weekly_volume = volume_data['weekly_volume']
-                print(f"   📈 Weekly volume: {weekly_volume:.2f} sales/week")
-                return weekly_volume
-            else:
-                print(f"   ⚠️ No volume data available, defaulting to 0")
+
+            # Build search terms and find catalog match
+            search_terms = self.volume_analyzer._extract_search_terms(shoe_name)
+            catalog_match = self.volume_analyzer.search_catalog_improved(search_terms)
+            if not catalog_match:
+                print(f"   ⚠️ No Alias catalog match for volume")
                 return 0.0
-                
+
+            # Parse size to float
+            try:
+                size_float = float(str(size).replace('Y', '').replace('W', '').replace('C', ''))
+            except (ValueError, TypeError):
+                print(f"   ⚠️ Invalid size for volume: {size}")
+                return 0.0
+
+            # Get recent sales for this size
+            sales_data = self.volume_analyzer._get_sales_for_size(catalog_match['catalog_id'], size_float)
+            if not sales_data:
+                print(f"   ⚠️ No sales data for this size")
+                return 0.0
+
+            # Count last 7 days
+            now = datetime.now(timezone.utc)
+            one_week_ago = now.timestamp() - 7 * 24 * 3600
+            count_last_week = 0
+            for sale in sales_data:
+                date_str = sale.get('purchased_at')
+                if not date_str:
+                    continue
+                try:
+                    if 'T' in date_str:
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    else:
+                        dt = datetime.fromisoformat(date_str)
+                    # Convert to UTC timestamp
+                    ts = dt.timestamp()
+                    if ts >= one_week_ago:
+                        count_last_week += 1
+                except Exception:
+                    continue
+
+            print(f"   📈 Weekly volume (last 7 days): {count_last_week}")
+            return float(count_last_week)
+
         except Exception as e:
             print(f"   ❌ Volume calculation error: {str(e)}")
             return 0.0
@@ -1867,6 +1899,16 @@ class InventoryStockXAnalyzer:
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
             'consignment_price', 'ship_to_verify_price',
             'weekly_volume', 'price_offer', 'offer_reasoning',
+            # Bulk advanced-style simple metrics for spreadsheet use
+            'final_recommendation',
+            'price_offer_numeric',
+            'stockx_bid_numeric', 'stockx_ask_numeric',
+            'goat_ship_to_verify_numeric', 'goat_consignment_numeric', 'goat_absolute_lowest',
+            'last_with_you_price_numeric', 'last_with_you_days_ago',
+            'last_consigned_price_numeric', 'last_consigned_days_ago',
+            'profit_vs_goat_lowest_gross', 'return_vs_goat_lowest_gross_pct',
+            'profit_vs_goat_consigned_gross', 'return_vs_goat_consigned_gross_pct',
+            'profit_vs_stockx_ask_gross', 'return_vs_stockx_ask_gross_pct',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
         
@@ -1930,6 +1972,46 @@ class InventoryStockXAnalyzer:
                             value = item.condition  # Use updated condition with notes
                         row[col] = value
                 
+                # Compute numeric helpers for advanced-style simple metrics
+                offer_num = self._parse_price(item.price_offer)
+                stockx_bid_num = self._parse_price(item.stockx_bid)
+                stockx_ask_num = self._parse_price(item.stockx_ask)
+                goat_ship_num = self._parse_price(item.ship_to_verify_price)
+                goat_consigned_num = self._parse_price(item.consignment_price)
+                goat_prices = [p for p in [goat_ship_num, goat_consigned_num] if p is not None and p > 0]
+                goat_abs_lowest = min(goat_prices) if goat_prices else None
+                last_with_you_price_num = self._parse_price(item.last_with_you_price)
+                last_with_you_days = item.last_with_you_date or ''
+                last_consigned_price_num = self._parse_price(item.last_consigned_price)
+                last_consigned_days = item.last_consigned_date or ''
+
+                def fmt(x):
+                    return f"${x:.2f}" if isinstance(x, (int, float)) and x is not None else ''
+
+                # Gross profit/returns (no fees assumed)
+                if offer_num and goat_abs_lowest:
+                    profit_goat_lowest = goat_abs_lowest - offer_num
+                    return_goat_lowest_pct = (profit_goat_lowest / offer_num * 100) if offer_num > 0 else None
+                else:
+                    profit_goat_lowest = None
+                    return_goat_lowest_pct = None
+
+                if offer_num and goat_consigned_num:
+                    profit_goat_consigned = goat_consigned_num - offer_num
+                    return_goat_consigned_pct = (profit_goat_consigned / offer_num * 100) if offer_num > 0 else None
+                else:
+                    profit_goat_consigned = None
+                    return_goat_consigned_pct = None
+
+                if offer_num and stockx_ask_num:
+                    profit_stockx_ask = stockx_ask_num - offer_num
+                    return_stockx_ask_pct = (profit_stockx_ask / offer_num * 100) if offer_num > 0 else None
+                else:
+                    profit_stockx_ask = None
+                    return_stockx_ask_pct = None
+
+                final_reco = f"BUY AT {item.price_offer}" if item.price_offer else ''
+
                 # Add our new data
                 row.update({
                     'quantity': item.quantity,
@@ -1947,6 +2029,23 @@ class InventoryStockXAnalyzer:
                     'weekly_volume': f"{item.weekly_volume:.2f}" if item.weekly_volume is not None else '',
                     'price_offer': item.price_offer or '',
                     'offer_reasoning': item.offer_reasoning or '',
+                    'final_recommendation': final_reco,
+                    'price_offer_numeric': f"{offer_num:.2f}" if offer_num is not None else '',
+                    'stockx_bid_numeric': f"{stockx_bid_num:.2f}" if stockx_bid_num is not None else '',
+                    'stockx_ask_numeric': f"{stockx_ask_num:.2f}" if stockx_ask_num is not None else '',
+                    'goat_ship_to_verify_numeric': f"{goat_ship_num:.2f}" if goat_ship_num is not None else '',
+                    'goat_consignment_numeric': f"{goat_consigned_num:.2f}" if goat_consigned_num is not None else '',
+                    'goat_absolute_lowest': fmt(goat_abs_lowest) if goat_abs_lowest is not None else '',
+                    'last_with_you_price_numeric': f"{last_with_you_price_num:.2f}" if last_with_you_price_num is not None else '',
+                    'last_with_you_days_ago': last_with_you_days,
+                    'last_consigned_price_numeric': f"{last_consigned_price_num:.2f}" if last_consigned_price_num is not None else '',
+                    'last_consigned_days_ago': last_consigned_days,
+                    'profit_vs_goat_lowest_gross': f"{profit_goat_lowest:.2f}" if profit_goat_lowest is not None else '',
+                    'return_vs_goat_lowest_gross_pct': f"{return_goat_lowest_pct:.1f}%" if return_goat_lowest_pct is not None else '',
+                    'profit_vs_goat_consigned_gross': f"{profit_goat_consigned:.2f}" if profit_goat_consigned is not None else '',
+                    'return_vs_goat_consigned_gross_pct': f"{return_goat_consigned_pct:.1f}%" if return_goat_consigned_pct is not None else '',
+                    'profit_vs_stockx_ask_gross': f"{profit_stockx_ask:.2f}" if profit_stockx_ask is not None else '',
+                    'return_vs_stockx_ask_gross_pct': f"{return_stockx_ask_pct:.1f}%" if return_stockx_ask_pct is not None else '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
