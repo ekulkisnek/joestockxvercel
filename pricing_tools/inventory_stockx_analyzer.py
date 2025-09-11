@@ -468,8 +468,8 @@ class InventoryStockXAnalyzer:
                 break
         
         if not price:
-            print(f"   ⚠️ No price found in: {line[:50]}...")
-            return []
+            # Try parsing without price (new format)
+            return self._try_parse_name_format_no_price(line)
         
         # Remove price and any notes after it
         line_without_price = line[:price_match.start()].strip()
@@ -506,6 +506,44 @@ class InventoryStockXAnalyzer:
                 items.append(item)
         
         print(f"   ✅ Parsed: '{shoe_name}' - {len(items)} items - ${price}")
+        return items
+    
+    def _try_parse_name_format_no_price(self, line: str) -> List[InventoryItem]:
+        """Try to parse shoe name format without price (new format)"""
+        import re
+        
+        # Look for size information with new patterns
+        size_info = self._extract_size_and_quantity_new_format(line)
+        
+        if not size_info:
+            print(f"   ⚠️ No size found in: {line[:50]}...")
+            return []
+        
+        # Extract shoe name (everything before size information)
+        shoe_name = self._extract_shoe_name_new_format(line)
+        
+        if not shoe_name:
+            print(f"   ⚠️ No shoe name found in: {line[:50]}...")
+            return []
+        
+        # Create items for each size/quantity combination
+        items = []
+        for size, quantity in size_info:
+            # Determine condition based on context
+            condition = self._determine_condition(line)
+            
+            for q in range(quantity):
+                item = InventoryItem(
+                    shoe_name=shoe_name,
+                    size=size,
+                    price="",  # No price in this format
+                    condition=condition
+                )
+                # Track original quantity for this size
+                item.quantity = quantity
+                items.append(item)
+        
+        print(f"   ✅ Parsed: '{shoe_name}' - {len(items)} items (no price)")
         return items
     
     def _extract_size_and_quantity(self, text: str) -> List[Tuple[str, int]]:
@@ -660,6 +698,125 @@ class InventoryStockXAnalyzer:
             return "Brand New (No Box)"  # No box but still new
         else:
             return "Brand New"  # Default assumption
+    
+    def _extract_size_and_quantity_new_format(self, text: str) -> List[Tuple[str, int]]:
+        """Extract size and quantity information from new format text"""
+        import re
+        
+        size_info = []
+        
+        # New format patterns - handle formats like:
+        # "7, 8, 8.5 women's"
+        # "Sz 9 & 12" 
+        # "8 & 10"
+        # "11"
+        # "Men's size 6, 9, 11, 11.5"
+        # "Size 9 & 9.5"
+        
+        # Pattern 1: Comma-separated sizes with gender suffix
+        # "7, 8, 8.5 women's" or "6, 9, 11, 11.5 Men's"
+        comma_pattern = r'(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*)\s*(?:women\'s|men\'s|w\'s|m\'s)?'
+        comma_match = re.search(comma_pattern, text, re.IGNORECASE)
+        if comma_match:
+            # Extract all sizes from the comma-separated list
+            sizes_text = comma_match.group(0)
+            sizes = re.findall(r'(\d+(?:\.\d+)?)', sizes_text)
+            for size_str in sizes:
+                size = self._normalize_extracted_size(size_str)
+                if size and self._is_reasonable_shoe_size(size):
+                    size_info.append((size, 1))
+            if size_info:
+                return size_info
+        
+        # Pattern 2: "Sz X & Y" or "Size X & Y"
+        sz_ampersand_pattern = r'(?:sz|size)\s+(\d+(?:\.\d+)?)\s*&\s*(\d+(?:\.\d+)?)'
+        sz_ampersand_match = re.search(sz_ampersand_pattern, text, re.IGNORECASE)
+        if sz_ampersand_match:
+            size1 = self._normalize_extracted_size(sz_ampersand_match.group(1))
+            size2 = self._normalize_extracted_size(sz_ampersand_match.group(2))
+            if size1 and self._is_reasonable_shoe_size(size1):
+                size_info.append((size1, 1))
+            if size2 and self._is_reasonable_shoe_size(size2):
+                size_info.append((size2, 1))
+            if size_info:
+                return size_info
+        
+        # Pattern 3: "X & Y" (simple ampersand format)
+        ampersand_pattern = r'(\d+(?:\.\d+)?)\s*&\s*(\d+(?:\.\d+)?)'
+        ampersand_match = re.search(ampersand_pattern, text)
+        if ampersand_match:
+            size1 = self._normalize_extracted_size(ampersand_match.group(1))
+            size2 = self._normalize_extracted_size(ampersand_match.group(2))
+            if size1 and self._is_reasonable_shoe_size(size1):
+                size_info.append((size1, 1))
+            if size2 and self._is_reasonable_shoe_size(size2):
+                size_info.append((size2, 1))
+            if size_info:
+                return size_info
+        
+        # Pattern 4: Single size with gender prefix
+        # "Men's size 6" or "women's 8.5"
+        gender_single_pattern = r'(?:men\'s|women\'s|w\'s|m\'s)\s*(?:size\s+)?(\d+(?:\.\d+)?)'
+        gender_single_match = re.search(gender_single_pattern, text, re.IGNORECASE)
+        if gender_single_match:
+            size = self._normalize_extracted_size(gender_single_match.group(1))
+            if size and self._is_reasonable_shoe_size(size):
+                size_info.append((size, 1))
+                return size_info
+        
+        # Pattern 4.5: Single size with gender suffix (like "8.5 women's")
+        gender_suffix_pattern = r'(\d+(?:\.\d+)?)\s*(?:women\'s|men\'s|w\'s|m\'s)'
+        gender_suffix_match = re.search(gender_suffix_pattern, text, re.IGNORECASE)
+        if gender_suffix_match:
+            size = self._normalize_extracted_size(gender_suffix_match.group(1))
+            if size and self._is_reasonable_shoe_size(size):
+                size_info.append((size, 1))
+                return size_info
+        
+        # Pattern 5: Single size at the end
+        # "11" or "5" at the end of the line
+        single_size_pattern = r'(\d+(?:\.\d+)?)\s*$'
+        single_size_match = re.search(single_size_pattern, text)
+        if single_size_match:
+            size = self._normalize_extracted_size(single_size_match.group(1))
+            if size and self._is_reasonable_shoe_size(size):
+                size_info.append((size, 1))
+                return size_info
+        
+        return size_info
+    
+    def _extract_shoe_name_new_format(self, text: str) -> str:
+        """Extract shoe name from new format text, removing size information"""
+        import re
+        
+        # Remove size patterns from the new format
+        text_clean = text
+        
+        # Remove comma-separated sizes with gender suffix
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)+\s*(?:women\'s|men\'s|w\'s|m\'s)?', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove "Sz X & Y" or "Size X & Y" patterns
+        text_clean = re.sub(r'\s*(?:sz|size)\s+\d+(?:\.\d+)?\s*&\s*\d+(?:\.\d+)?', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove "X & Y" patterns
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*&\s*\d+(?:\.\d+)?', '', text_clean)
+        
+        # Remove gender + size patterns
+        text_clean = re.sub(r'\s*(?:men\'s|women\'s|w\'s|m\'s)\s*(?:size\s+)?\d+(?:\.\d+)?', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove size + gender patterns (like "8.5 women's")
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*(?:women\'s|men\'s|w\'s|m\'s)', '', text_clean, flags=re.IGNORECASE)
+        
+        # Remove single size at the end
+        text_clean = re.sub(r'\s*\d+(?:\.\d+)?\s*$', '', text_clean)
+        
+        # Remove "Sz" at the end (common pattern)
+        text_clean = re.sub(r'\s*sz\s*$', '', text_clean, flags=re.IGNORECASE)
+        
+        # Clean up extra spaces
+        text_clean = re.sub(r'\s+', ' ', text_clean).strip()
+        
+        return text_clean
 
     def _is_complete_item_row(self, row: List[str]) -> bool:
         """Check if this row contains a complete item (Format 1)"""
