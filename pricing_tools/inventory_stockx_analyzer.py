@@ -32,6 +32,7 @@ sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure'
 
 # Import our existing StockX client
 from smart_stockx_client import SmartStockXClient
+from sales_volume_analyzer import SalesVolumeAnalyzer
 
 class InventoryItem:
     """Represents a single inventory item"""
@@ -75,6 +76,11 @@ class InventoryItem:
         # Profit calculations
         self.bid_profit = None
         self.ask_profit = None
+        
+        # Volume and pricing data
+        self.weekly_volume = None
+        self.price_offer = None
+        self.offer_reasoning = None
     
     def _extract_condition_notes(self, shoe_name: str) -> str:
         """Extract condition notes from shoe name (DS, VNDS, no box, etc.)"""
@@ -108,6 +114,9 @@ class InventoryStockXAnalyzer:
         self.processed_count = 0
         self.matches_found = 0
         self.cache = {}
+        
+        # Initialize volume analyzer for weekly volume calculations
+        self.volume_analyzer = SalesVolumeAnalyzer()
         
         # Setup robust token file handling for different deployment environments
         self._setup_authentication()
@@ -1073,6 +1082,124 @@ class InventoryStockXAnalyzer:
             print(f"   ❌ Alias API error: {str(e)}")
             return None
     
+    def calculate_weekly_volume(self, shoe_name: str, size: str) -> float:
+        """Calculate weekly sales volume for a shoe using Alias API"""
+        try:
+            print(f"   📊 Calculating weekly volume for: {shoe_name} (Size {size})")
+            
+            # Get volume data from the volume analyzer
+            volume_data = self.volume_analyzer.get_weekly_volume(shoe_name, size)
+            
+            if volume_data and volume_data.get('weekly_volume') is not None:
+                weekly_volume = volume_data['weekly_volume']
+                print(f"   📈 Weekly volume: {weekly_volume:.2f} sales/week")
+                return weekly_volume
+            else:
+                print(f"   ⚠️ No volume data available, defaulting to 0")
+                return 0.0
+                
+        except Exception as e:
+            print(f"   ❌ Volume calculation error: {str(e)}")
+            return 0.0
+    
+    def calculate_price_offer(self, item: InventoryItem) -> Tuple[Optional[float], str]:
+        """Calculate price offer based on volume and pricing rules (matching advanced shoe analyzer logic)"""
+        try:
+            # Extract numeric values
+            stockx_bid = self._parse_price(item.stockx_bid) if item.stockx_bid else None
+            stockx_ask = self._parse_price(item.stockx_ask) if item.stockx_ask else None
+            
+            # Get GOAT lowest ask (including both consigned and ship-to-verify)
+            goat_consigned = self._parse_price(item.lowest_consigned) if item.lowest_consigned else None
+            goat_ship_to_verify = self._parse_price(item.ship_to_verify_price) if item.ship_to_verify_price else None
+            
+            # Determine GOAT absolute lowest (including both consigned and ship-to-verify)
+            valid_goat_prices = [p for p in [goat_consigned, goat_ship_to_verify] if p is not None and p > 0]
+            goat_absolute_lowest = min(valid_goat_prices) if valid_goat_prices else None
+            
+            # Get weekly volume
+            weekly_volume = item.weekly_volume or 0.0
+            is_high_volume = weekly_volume >= 3.0
+            
+            print(f"   💰 Price Offer Calculation:")
+            print(f"   📊 Weekly Volume: {weekly_volume:.2f} ({'High' if is_high_volume else 'Low'} volume)")
+            print(f"   💵 StockX Bid: ${stockx_bid or 'N/A'}")
+            print(f"   💵 StockX Ask: ${stockx_ask or 'N/A'}")
+            print(f"   🐐 GOAT Absolute Lowest: ${goat_absolute_lowest or 'N/A'}")
+            
+            # Apply pricing rules based on your exact requirements
+            if is_high_volume and stockx_bid and goat_absolute_lowest and goat_absolute_lowest > 0:
+                # High volume (≥3/week): Pay StockX bid if bid ≥20% of GOAT lowest ask
+                min_bid_threshold = goat_absolute_lowest * 0.8  # 20% of GOAT ask
+                
+                if stockx_bid >= min_bid_threshold:
+                    offer_price = stockx_bid
+                    reasoning = f"High volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (≥20% of GOAT ask ${goat_absolute_lowest:.2f})"
+                    print(f"   ✅ {reasoning}")
+                    return offer_price, reasoning
+                else:
+                    # Check if bid is 19% or less lower than GOAT ask
+                    percent_diff = ((goat_absolute_lowest - stockx_bid) / goat_absolute_lowest) * 100
+                    if percent_diff <= 19:  # Bid is 19% or less lower than GOAT ask
+                        offer_price = goat_absolute_lowest * 0.8  # 20% lower than GOAT ask
+                        reasoning = f"High volume ({weekly_volume:.1f}/week): Bid only {percent_diff:.1f}% lower than GOAT ask, offer 20% lower = ${offer_price:.2f}"
+                        print(f"   ✅ {reasoning}")
+                        return offer_price, reasoning
+                    else:
+                        reasoning = f"High volume but bid too low: ${stockx_bid:.2f} is {percent_diff:.1f}% lower than GOAT ask ${goat_absolute_lowest:.2f} (>19%)"
+                        print(f"   ❌ {reasoning}")
+                        return None, reasoning
+                        
+            elif is_high_volume and stockx_bid:
+                # High volume but no GOAT data - pay StockX bid
+                offer_price = stockx_bid
+                reasoning = f"High volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (no GOAT data)"
+                print(f"   ✅ {reasoning}")
+                return offer_price, reasoning
+                
+            elif not is_high_volume and stockx_bid and goat_absolute_lowest and goat_absolute_lowest > 0:
+                # Low volume (≤2/week): Pay bid as long as it is ≥20% of GOAT ask
+                min_bid_threshold = goat_absolute_lowest * 0.8  # 20% of GOAT ask
+                
+                if stockx_bid >= min_bid_threshold:
+                    offer_price = stockx_bid
+                    reasoning = f"Low volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (≥20% of GOAT ask ${goat_absolute_lowest:.2f})"
+                    print(f"   ✅ {reasoning}")
+                    return offer_price, reasoning
+                else:
+                    reasoning = f"Low volume: Bid ${stockx_bid:.2f} < 20% of GOAT ask ${goat_absolute_lowest:.2f}"
+                    print(f"   ❌ {reasoning}")
+                    return None, reasoning
+                    
+            elif not is_high_volume and stockx_bid:
+                # Low volume but no GOAT data - pay StockX bid
+                offer_price = stockx_bid
+                reasoning = f"Low volume ({weekly_volume:.1f}/week): Pay StockX bid ${stockx_bid:.2f} (no GOAT data)"
+                print(f"   ✅ {reasoning}")
+                return offer_price, reasoning
+                
+            else:
+                # No pricing data available
+                reasoning = f"{'High' if is_high_volume else 'Low'} volume ({weekly_volume:.1f}/week): No pricing data available"
+                print(f"   ❌ {reasoning}")
+                return None, reasoning
+                    
+        except Exception as e:
+            reasoning = f"Error calculating price offer: {str(e)}"
+            print(f"   ❌ {reasoning}")
+            return None, reasoning
+    
+    def _parse_price(self, price_str: str) -> Optional[float]:
+        """Parse price string to float, handling $ and other formatting"""
+        if not price_str:
+            return None
+        try:
+            # Remove $ and other non-numeric characters except decimal point
+            cleaned = re.sub(r'[^\d.]', '', str(price_str))
+            return float(cleaned) if cleaned else None
+        except (ValueError, TypeError):
+            return None
+    
     def _try_alias_search(self, base_url: str, headers: Dict, query: str) -> Optional[Dict]:
         """Try to search Alias API with a given query"""
         try:
@@ -1365,6 +1492,9 @@ class InventoryStockXAnalyzer:
             item.stockx_shoe_name = cached_result.get('shoe_name')
             item.bid_profit = f"${cached_result['bid_profit']:.2f}" if cached_result.get('bid_profit') is not None else None
             item.ask_profit = f"${cached_result['ask_profit']:.2f}" if cached_result.get('ask_profit') is not None else None
+            item.weekly_volume = cached_result.get('weekly_volume')
+            item.price_offer = f"${cached_result['price_offer']:.2f}" if cached_result.get('price_offer') is not None else None
+            item.offer_reasoning = cached_result.get('offer_reasoning')
             return True
         return False
     
@@ -1410,6 +1540,17 @@ class InventoryStockXAnalyzer:
             if not alias_data:
                 alias_data = self.get_alias_pricing_data(best_product['title'], str(variant_size))
             
+            # Calculate weekly volume
+            print(f"   📊 Calculating weekly volume...", flush=True)
+            weekly_volume = self.calculate_weekly_volume(item.shoe_name, str(variant_size))
+            item.weekly_volume = weekly_volume
+            
+            # Calculate price offer using advanced pricing logic
+            print(f"   💰 Calculating price offer...", flush=True)
+            offer_price, offer_reasoning = self.calculate_price_offer(item)
+            item.price_offer = f"${offer_price:.2f}" if offer_price else None
+            item.offer_reasoning = offer_reasoning
+            
             # Extract pricing data
             bid_amount = market_data.get('highestBidAmount')
             ask_amount = market_data.get('lowestAskAmount')
@@ -1443,6 +1584,9 @@ class InventoryStockXAnalyzer:
                 'last_with_you_date': alias_data.get('last_with_you_date') if alias_data else None,
                 'consignment_price': alias_data.get('consignment_price') if alias_data else None,
                 'ship_to_verify_price': alias_data.get('ship_to_verify_price') if alias_data else None,
+                'weekly_volume': weekly_volume,
+                'price_offer': offer_price,
+                'offer_reasoning': offer_reasoning,
                 'sku': best_product.get('style_id', ''),
                 'url': stockx_url,
                 'size': str(variant_size),
@@ -1698,6 +1842,7 @@ class InventoryStockXAnalyzer:
             'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
             'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
             'consignment_price', 'ship_to_verify_price',
+            'weekly_volume', 'price_offer', 'offer_reasoning',
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
         
@@ -1775,6 +1920,9 @@ class InventoryStockXAnalyzer:
                     'last_with_you_date': item.last_with_you_date or '',
                     'consignment_price': item.consignment_price or '',
                     'ship_to_verify_price': item.ship_to_verify_price or '',
+                    'weekly_volume': f"{item.weekly_volume:.2f}" if item.weekly_volume is not None else '',
+                    'price_offer': item.price_offer or '',
+                    'offer_reasoning': item.offer_reasoning or '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',

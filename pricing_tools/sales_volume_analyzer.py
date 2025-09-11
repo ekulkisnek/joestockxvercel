@@ -456,6 +456,64 @@ class SalesVolumeAnalyzer:
             'latest_sale': None
         }
 
+    def get_weekly_volume(self, shoe_name: str, size: str) -> Dict:
+        """Return estimated weekly sales volume for a shoe size using Alias recent sales.
+
+        The calculation is based on recent sales velocity (reported_sales_velocity_per_day)
+        multiplied by 7. If no data is available, returns 0.0.
+        """
+        try:
+            # Build search terms from provided shoe name
+            search_terms = self._extract_search_terms(shoe_name)
+
+            # Find a catalog match
+            catalog_match = self.search_catalog_improved(search_terms)
+            if not catalog_match:
+                return {
+                    'weekly_volume': 0.0,
+                    'reason': 'no_catalog_match'
+                }
+
+            catalog_id = catalog_match.get('catalog_id')
+
+            # Parse size to float (strip suffixes like Y, W, C)
+            size_numeric_str = re.sub(r'[^0-9\.]', '', str(size)) if size is not None else ''
+            try:
+                size_float = float(size_numeric_str) if size_numeric_str else None
+            except Exception:
+                size_float = None
+
+            if size_float is None:
+                return {
+                    'weekly_volume': 0.0,
+                    'reason': 'invalid_size'
+                }
+
+            # Fetch recent sales for this size
+            sales_data = self._get_sales_for_size(catalog_id, size_float)
+            if not sales_data:
+                return {
+                    'weekly_volume': 0.0,
+                    'reason': 'no_sales_data'
+                }
+
+            # Compute metrics and weekly volume
+            metrics = self._calculate_size_metrics(sales_data, size_float)
+            velocity_per_day = metrics.get('reported_sales_velocity_per_day', 0) or 0
+            weekly_volume = float(velocity_per_day) * 7.0
+
+            return {
+                'weekly_volume': round(weekly_volume, 3),
+                'period_days': metrics.get('period_days', 0),
+                'reported_sales_count': metrics.get('reported_sales_count', 0),
+                'hit_api_limit': metrics.get('hit_api_limit', False)
+            }
+        except Exception as e:
+            return {
+                'weekly_volume': 0.0,
+                'reason': f'error: {e}'
+            }
+
     def analyze_all_shoes(self, csv_file: str) -> List[Dict]:
         """Analyze all shoes with proper limit handling"""
         shoes = self.parse_csv_flexible(csv_file)
