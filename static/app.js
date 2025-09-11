@@ -129,10 +129,22 @@ function createOutputContainer(scriptId) {
 
 function updateRunningProcesses(processes) {
     var section = document.querySelector('.running-processes');
-    if (!section) return;
     
-    var html = '<h2>🔄 Running Processes</h2>';
     if (processes.length > 0) {
+        // Show the section if there are running processes
+        if (!section) {
+            // Create the section if it doesn't exist
+            var uploadSection = document.querySelector('.upload-section');
+            if (uploadSection) {
+                var newSection = document.createElement('div');
+                newSection.className = 'running-processes';
+                newSection.innerHTML = '<hr><h2>🔄 Running Processes</h2>';
+                uploadSection.parentNode.insertBefore(newSection, uploadSection);
+                section = newSection;
+            }
+        }
+        
+        var html = '<h2>🔄 Running Processes</h2>';
         for (var i = 0; i < processes.length; i++) {
             html += '<div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">';
             html += '<span class="running-indicator">⏳ ' + processes[i] + ' is running...</span>';
@@ -140,11 +152,13 @@ function updateRunningProcesses(processes) {
             html += '</div>';
         }
         html += '<p><small>Real-time streaming updates via WebSocket</small></p>';
+        section.innerHTML = html;
     } else {
-        html += '<p>No scripts currently running</p>';
-        html += '<p><small>Real-time streaming updates via WebSocket</small></p>';
+        // Hide the section if there are no running processes
+        if (section) {
+            section.remove();
+        }
     }
-    section.innerHTML = html;
 }
 
 function stopProcess(scriptId) {
