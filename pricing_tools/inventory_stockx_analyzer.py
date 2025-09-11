@@ -34,6 +34,9 @@ sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure'
 from smart_stockx_client import SmartStockXClient
 from sales_volume_analyzer import SalesVolumeAnalyzer
 
+# Configurable GOAT fee rate (platform + processing). Default 13%.
+GOAT_FEE_RATE = float(os.getenv('GOAT_FEE_RATE', '0.13'))
+
 class InventoryItem:
     """Represents a single inventory item"""
     def __init__(self, shoe_name: str, size: str = None, price: str = None, condition: str = None, original_data: Dict = None):
@@ -85,6 +88,11 @@ class InventoryItem:
         
         # Sales history summary
         self.last_5_sales_text = None
+        
+        # Preserve original user inputs (exact as written)
+        self.input_shoe = None
+        self.input_size = None
+        self.input_condition = None
     
     def _extract_condition_notes(self, shoe_name: str) -> str:
         """Extract condition notes from shoe name (DS, VNDS, no box, etc.)"""
@@ -257,6 +265,10 @@ class InventoryStockXAnalyzer:
 
             if shoe_name.strip():  # Only process if we have a shoe name
                 item = InventoryItem(shoe_name, size, price, condition, original_data)
+                # Preserve original inputs exactly as written in leftmost columns
+                item.input_shoe = shoe_name
+                item.input_size = size
+                item.input_condition = condition
                 items.append(item)
 
         return items
@@ -1982,24 +1994,16 @@ class InventoryStockXAnalyzer:
         # Get all original column names from first item
         original_columns = list(items[0].original_data.keys()) if items[0].original_data else []
         
-        # Define our new columns that we want to add
+        # Define our new columns that we want to add (ordered per request)
         our_columns = [
-            'quantity', 'condition', 'stockx_bid', 'stockx_ask',
-            'lowest_consigned', 'last_consigned_price', 'last_consigned_date', 
-            'lowest_with_you', 'last_with_you_price', 'last_with_you_date',
-            'consignment_price', 'ship_to_verify_price',
-            'weekly_volume', 'weekly_volume_prev', 'price_offer', 'offer_reasoning',
-            'last_5_sales_text',
-            # Bulk advanced-style simple metrics for spreadsheet use
-            'final_recommendation',
-            'price_offer_numeric',
-            'stockx_bid_numeric', 'stockx_ask_numeric',
-            'goat_ship_to_verify_numeric', 'goat_consignment_numeric', 'goat_absolute_lowest',
-            'last_with_you_price_numeric', 'last_with_you_days_ago',
-            'last_consigned_price_numeric', 'last_consigned_days_ago',
-            'profit_vs_goat_lowest_gross', 'return_vs_goat_lowest_gross_pct',
-            'profit_vs_goat_consigned_gross', 'return_vs_goat_consigned_gross_pct',
-            'profit_vs_stockx_ask_gross', 'return_vs_stockx_ask_gross_pct',
+            # First, our 3 core columns
+            'price_offer', 'offer_reasoning', 'last_5_sales_text',
+            # Then StockX/GOAT fields and volume
+            'stockx_bid', 'stockx_ask', 'lowest_consigned', 'last_consigned_price', 'last_consigned_date',
+            'lowest_with_you', 'last_with_you_price', 'last_with_you_date', 'consignment_price', 'ship_to_verify_price', 'weekly_volume',
+            # Net after GOAT fees when selling at lowest GOAT with our offer
+            'net_after_goat_fees_lowest_with_offer',
+            # Finally identifiers
             'stockx_sku', 'stockx_url', 'stockx_size', 'stockx_shoe_name'
         ]
         
@@ -2043,12 +2047,12 @@ class InventoryStockXAnalyzer:
         # Add any remaining original columns
         ordered_columns.extend(remaining_original)
         
-        # Add our new columns
-        ordered_columns.extend(our_columns)
+        # Build final field order: input originals at far left, then all original columns, then our columns
+        fieldnames = ['input_shoe', 'input_size', 'input_condition'] + ordered_columns + our_columns
         
         # Write the CSV
         with open(output_file, 'w', newline='', encoding='utf-8') as outfile:
-            writer = csv.DictWriter(outfile, fieldnames=ordered_columns)
+            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
             writer.writeheader()
 
             for item in items:
@@ -2063,7 +2067,7 @@ class InventoryStockXAnalyzer:
                             value = item.condition  # Use updated condition with notes
                         row[col] = value
                 
-                # Compute numeric helpers for advanced-style simple metrics
+                # Compute numeric helpers
                 offer_num = self._parse_price(item.price_offer)
                 stockx_bid_num = self._parse_price(item.stockx_bid)
                 stockx_ask_num = self._parse_price(item.stockx_ask)
@@ -2071,42 +2075,21 @@ class InventoryStockXAnalyzer:
                 goat_consigned_num = self._parse_price(item.consignment_price)
                 goat_prices = [p for p in [goat_ship_num, goat_consigned_num] if p is not None and p > 0]
                 goat_abs_lowest = min(goat_prices) if goat_prices else None
-                last_with_you_price_num = self._parse_price(item.last_with_you_price)
-                last_with_you_days = item.last_with_you_date or ''
-                last_consigned_price_num = self._parse_price(item.last_consigned_price)
-                last_consigned_days = item.last_consigned_date or ''
 
-                def fmt(x):
-                    return f"${x:.2f}" if isinstance(x, (int, float)) and x is not None else ''
-
-                # Gross profit/returns (no fees assumed)
-                if offer_num and goat_abs_lowest:
-                    profit_goat_lowest = goat_abs_lowest - offer_num
-                    return_goat_lowest_pct = (profit_goat_lowest / offer_num * 100) if offer_num > 0 else None
+                # Net after GOAT fees when selling at lowest GOAT, buying at our offer
+                if offer_num is not None and goat_abs_lowest is not None:
+                    net_after_goat = goat_abs_lowest * (1 - GOAT_FEE_RATE) - offer_num
                 else:
-                    profit_goat_lowest = None
-                    return_goat_lowest_pct = None
-
-                if offer_num and goat_consigned_num:
-                    profit_goat_consigned = goat_consigned_num - offer_num
-                    return_goat_consigned_pct = (profit_goat_consigned / offer_num * 100) if offer_num > 0 else None
-                else:
-                    profit_goat_consigned = None
-                    return_goat_consigned_pct = None
-
-                if offer_num and stockx_ask_num:
-                    profit_stockx_ask = stockx_ask_num - offer_num
-                    return_stockx_ask_pct = (profit_stockx_ask / offer_num * 100) if offer_num > 0 else None
-                else:
-                    profit_stockx_ask = None
-                    return_stockx_ask_pct = None
-
-                final_reco = f"BUY AT {item.price_offer}" if item.price_offer else ''
+                    net_after_goat = None
 
                 # Add our new data
                 row.update({
-                    'quantity': item.quantity,
-                    'condition': item.condition,
+                    'input_shoe': item.input_shoe or item.shoe_name,
+                    'input_size': item.input_size or item.size,
+                    'input_condition': item.input_condition or item.condition,
+                    'price_offer': item.price_offer or '',
+                    'offer_reasoning': item.offer_reasoning or '',
+                    'last_5_sales_text': item.last_5_sales_text or '',
                     'stockx_bid': item.stockx_bid or '',
                     'stockx_ask': item.stockx_ask or '',
                     'lowest_consigned': item.lowest_consigned or '',
@@ -2117,28 +2100,8 @@ class InventoryStockXAnalyzer:
                     'last_with_you_date': item.last_with_you_date or '',
                     'consignment_price': item.consignment_price or '',
                     'ship_to_verify_price': item.ship_to_verify_price or '',
-                    'weekly_volume': f"{item.weekly_volume:.2f}" if item.weekly_volume is not None else '',
-                    'weekly_volume_prev': f"{item.weekly_volume_prev:.2f}" if item.weekly_volume_prev is not None else '',
-                    'price_offer': item.price_offer or '',
-                    'offer_reasoning': item.offer_reasoning or '',
-                    'last_5_sales_text': item.last_5_sales_text or '',
-                    'final_recommendation': final_reco,
-                    'price_offer_numeric': f"{offer_num:.2f}" if offer_num is not None else '',
-                    'stockx_bid_numeric': f"{stockx_bid_num:.2f}" if stockx_bid_num is not None else '',
-                    'stockx_ask_numeric': f"{stockx_ask_num:.2f}" if stockx_ask_num is not None else '',
-                    'goat_ship_to_verify_numeric': f"{goat_ship_num:.2f}" if goat_ship_num is not None else '',
-                    'goat_consignment_numeric': f"{goat_consigned_num:.2f}" if goat_consigned_num is not None else '',
-                    'goat_absolute_lowest': fmt(goat_abs_lowest) if goat_abs_lowest is not None else '',
-                    'last_with_you_price_numeric': f"{last_with_you_price_num:.2f}" if last_with_you_price_num is not None else '',
-                    'last_with_you_days_ago': last_with_you_days,
-                    'last_consigned_price_numeric': f"{last_consigned_price_num:.2f}" if last_consigned_price_num is not None else '',
-                    'last_consigned_days_ago': last_consigned_days,
-                    'profit_vs_goat_lowest_gross': f"{profit_goat_lowest:.2f}" if profit_goat_lowest is not None else '',
-                    'return_vs_goat_lowest_gross_pct': f"{return_goat_lowest_pct:.1f}%" if return_goat_lowest_pct is not None else '',
-                    'profit_vs_goat_consigned_gross': f"{profit_goat_consigned:.2f}" if profit_goat_consigned is not None else '',
-                    'return_vs_goat_consigned_gross_pct': f"{return_goat_consigned_pct:.1f}%" if return_goat_consigned_pct is not None else '',
-                    'profit_vs_stockx_ask_gross': f"{profit_stockx_ask:.2f}" if profit_stockx_ask is not None else '',
-                    'return_vs_stockx_ask_gross_pct': f"{return_stockx_ask_pct:.1f}%" if return_stockx_ask_pct is not None else '',
+                    'weekly_volume': f"{item.weekly_volume:.0f}" if item.weekly_volume is not None else '',
+                    'net_after_goat_fees_lowest_with_offer': f"${net_after_goat:.2f}" if net_after_goat is not None else '',
                     'stockx_sku': item.stockx_sku or '',
                     'stockx_url': item.stockx_url or '',
                     'stockx_size': item.stockx_size or '',
