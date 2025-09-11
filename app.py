@@ -1192,21 +1192,6 @@ HTML_TEMPLATE = """
         {% endif %}
     {% endwith %}
     
-    {% if running_processes %}
-    <div class="running-processes" style="border: 1px solid #ddd; padding: 12px; border-radius: 6px; background: #f8f9fa;">
-        <h2>🔄 Running Processes</h2>
-        {% for script_id in running_processes %}
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                <span class="running-indicator">⏳ {{ script_id }} is running...</span>
-                <button onclick="stopProcess('{{ script_id }}')" 
-                        style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer;">
-                    Stop Process
-                </button>
-            </div>
-        {% endfor %}
-        <p><small>Real-time streaming updates via WebSocket</small></p>
-    </div>
-    {% endif %}
 
     <div class="upload-section">
         <h2>📊 Bulk Analysis Tools</h2>
@@ -1444,25 +1429,23 @@ Nike Air Max 1"
         <p><em>⏱️ Processing can take several minutes. Your files remain available even if you close the browser.</em></p>
     </div>
     
+    {% if running_processes %}
     <hr>
     
     <div class="running-processes">
         <h2>🔄 Running Processes</h2>
-        {% if running_processes %}
-            {% for script_id in running_processes %}
-                <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">
-                    <span class="running-indicator">⏳ {{ script_id }} is running...</span>
-                    <button onclick="stopProcess('{{ script_id }}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 4px 8px; margin-left: 10px; cursor: pointer;">
-                        Stop Process
-                    </button>
-                </div>
-            {% endfor %}
-        {% else %}
-            <p>No scripts currently running</p>
-        {% endif %}
+        {% for script_id in running_processes %}
+            <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9;">
+                <span class="running-indicator">⏳ {{ script_id }} is running...</span>
+                <button onclick="stopProcess('{{ script_id }}')" 
+                        style="background: #dc3545; color: white; border: none; padding: 4px 8px; margin-left: 10px; cursor: pointer;">
+                    Stop Process
+                </button>
+            </div>
+        {% endfor %}
         <p><small>Real-time streaming updates via WebSocket</small></p>
     </div>
+    {% endif %}
     
     <div id="recent-activity">
         <h2>📋 Recent Activity</h2>
