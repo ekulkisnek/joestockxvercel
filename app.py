@@ -4132,9 +4132,9 @@ def list_downloads():
             except Exception:
                 dir_listing = []
             for filename in dir_listing:
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(abs_dir, filename)
                     try:

@@ -1495,9 +1495,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -2568,9 +2568,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -3641,9 +3641,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -4714,9 +4714,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -5787,9 +5787,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -6860,9 +6860,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
@@ -7933,9 +7933,9 @@ def list_downloads():
     for directory in download_dirs:
         if os.path.exists(directory):
             for filename in os.listdir(directory):
-                # Look for CSV files and enhanced output files (which might be .txt)
+                # Look for CSV files and enhanced output files (which might be .txt or .csv)
                 if (filename.endswith('.csv') or 
-                    (filename.startswith('stockx_enhanced_') and filename.endswith('.txt')) or
+                    (filename.startswith('stockx_enhanced_') and (filename.endswith('.txt') or filename.endswith('.csv'))) or
                     (filename.startswith('sales_volume_analysis_') and filename.endswith('.csv'))):
                     filepath = os.path.join(directory, filename)
                     try:
