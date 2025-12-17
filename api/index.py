@@ -6,23 +6,21 @@ import os
 import io
 import traceback
 
+# Set Vercel environment before any imports
+os.environ['VERCEL'] = '1'
+
 # Add parent directory to path to import app
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Initialize Flask app with error handling
+# Initialize Flask app with error handling - defer import to handler
 app = None
-try:
-    from app import app as flask_app
-    app = flask_app
-except Exception as e:
-    # Store error for later use
-    import_error = f"Import error: {str(e)}\n{traceback.format_exc()}"
+import_error = None
 
 # Vercel Python runtime expects a handler function
 def handler(request):
-    global app
+    global app, import_error
     
-    # If app failed to import, return error
+    # Lazy import app only when handler is called
     if app is None:
         try:
             from app import app as flask_app

@@ -1,0 +1,8 @@
+flask
+requests
+urllib3
+certifi
+psutil
+werkzeug
+pytz
+
