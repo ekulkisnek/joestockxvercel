@@ -24,3 +24,4 @@ stockx_enhanced_*.csv
 # Replit artifacts
 .replit
 replit.nix
+.vercel
