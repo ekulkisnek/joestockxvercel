@@ -5,6 +5,4 @@ certifi
 flask-socketio
 psutil
 werkzeug
-flask-socketio
-eventlet
 pytz
