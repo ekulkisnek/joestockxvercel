@@ -25,26 +25,52 @@ from typing import List, Dict, Optional
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
 
+# Check if running on Vercel (serverless environment)
+IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
+
 # Initialize SocketIO with production-ready configuration
-try:
-    # Try with eventlet for production deployment
-    socketio = SocketIO(
-        app, 
-        cors_allowed_origins="*",
-        async_mode='eventlet',
-        logger=True,
-        engineio_logger=True
-    )
-except Exception as e:
-    print(f"⚠️ Could not initialize with eventlet, falling back to threading: {e}")
-    # Fallback to threading mode
-    socketio = SocketIO(
-        app, 
-        cors_allowed_origins="*",
-        async_mode='threading',
-        logger=False,
-        engineio_logger=False
-    )
+# Disable SocketIO on Vercel as it's not compatible with serverless
+socketio = None
+if not IS_VERCEL:
+    try:
+        # Try with eventlet for production deployment
+        socketio = SocketIO(
+            app, 
+            cors_allowed_origins="*",
+            async_mode='eventlet',
+            logger=True,
+            engineio_logger=True
+        )
+    except Exception as e:
+        print(f"⚠️ Could not initialize with eventlet, falling back to threading: {e}")
+        # Fallback to threading mode
+        try:
+            socketio = SocketIO(
+                app, 
+                cors_allowed_origins="*",
+                async_mode='threading',
+                logger=False,
+                engineio_logger=False
+            )
+        except Exception as e2:
+            print(f"⚠️ Could not initialize SocketIO: {e2}")
+            socketio = None
+else:
+    print("⚠️ Running on Vercel - SocketIO disabled (not compatible with serverless)")
+
+# Create a no-op socketio object if None (for Vercel compatibility)
+if socketio is None:
+    class NoOpSocketIO:
+        def emit(self, *args, **kwargs):
+            pass  # No-op for serverless environments
+        def run(self, *args, **kwargs):
+            pass  # No-op
+        def on(self, *args, **kwargs):
+            # Decorator support - returns a no-op decorator
+            def decorator(func):
+                return func  # Return function unchanged
+            return decorator
+    socketio = NoOpSocketIO()
 
 # File upload configuration
 UPLOAD_FOLDER = 'uploads'
