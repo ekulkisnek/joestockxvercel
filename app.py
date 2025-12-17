@@ -5,7 +5,6 @@ Run any script from the web interface
 """
 
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, send_from_directory
-from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 import subprocess
 import threading
@@ -22,16 +21,27 @@ import psutil
 import time
 from typing import List, Dict, Optional
 
+# Check if running on Vercel before importing SocketIO/eventlet
+IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
+
+# Only import SocketIO if not on Vercel (eventlet causes issues with Vercel's runtime)
+if not IS_VERCEL:
+    try:
+        from flask_socketio import SocketIO, emit
+    except ImportError:
+        SocketIO = None
+        emit = None
+else:
+    SocketIO = None
+    emit = None
+
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
-
-# Check if running on Vercel (serverless environment)
-IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
 # Initialize SocketIO with production-ready configuration
 # Disable SocketIO on Vercel as it's not compatible with serverless
 socketio = None
-if not IS_VERCEL:
+if not IS_VERCEL and SocketIO is not None:
     try:
         # Try with eventlet for production deployment
         socketio = SocketIO(
