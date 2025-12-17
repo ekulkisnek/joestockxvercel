@@ -3,25 +3,11 @@
 🌐 Minimal Flask Web UI for StockX Tools
 Run any script from the web interface
 """
-
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, send_from_directory
-from werkzeug.utils import secure_filename
-import subprocess
-import threading
 import os
 import sys
-import json
-import requests
-import secrets
-import webbrowser
-from urllib.parse import urlencode, parse_qs
-from datetime import datetime
-import signal
-import psutil
-import time
-from typing import List, Dict, Optional
 
-# Check if running on Vercel before importing SocketIO/eventlet
+# Check if running on Vercel BEFORE any other imports
+# This prevents eventlet from being imported which causes issues with Vercel's runtime
 IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
 # Only import SocketIO if not on Vercel (eventlet causes issues with Vercel's runtime)
@@ -34,6 +20,21 @@ if not IS_VERCEL:
 else:
     SocketIO = None
     emit = None
+
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, send_from_directory
+from werkzeug.utils import secure_filename
+import subprocess
+import threading
+import json
+import requests
+import secrets
+import webbrowser
+from urllib.parse import urlencode, parse_qs
+from datetime import datetime
+import signal
+import psutil
+import time
+from typing import List, Dict, Optional
 
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
