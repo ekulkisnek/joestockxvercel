@@ -23,53 +23,53 @@ if not IS_VERCEL:
         """Handle OAuth callback automatically"""
         
         def do_GET(self):
-        # Parse the callback URL
-        if '?' in self.path:
-            query_string = self.path.split('?', 1)[1]
-            params = parse_qs(query_string)
-            
-            # Store the authorization code
-            if 'code' in params:
-                self.server.auth_code = params['code'][0]
-                self.server.auth_success = True
+            # Parse the callback URL
+            if '?' in self.path:
+                query_string = self.path.split('?', 1)[1]
+                params = parse_qs(query_string)
                 
-                # Send success page
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
+                # Store the authorization code
+                if 'code' in params:
+                    self.server.auth_code = params['code'][0]
+                    self.server.auth_success = True
+                    
+                    # Send success page
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+                    
+                    success_html = """
+                    <html>
+                    <head><title>StockX Auth Success</title></head>
+                    <body style="font-family: Arial; text-align: center; padding: 50px;">
+                        <h1 style="color: green;">✅ Authentication Successful!</h1>
+                        <p>You can close this browser window now.</p>
+                        <p>The StockX API client is now authenticated.</p>
+                    </body>
+                    </html>
+                    """
+                    self.wfile.write(success_html.encode())
                 
-                success_html = """
-                <html>
-                <head><title>StockX Auth Success</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1 style="color: green;">✅ Authentication Successful!</h1>
-                    <p>You can close this browser window now.</p>
-                    <p>The StockX API client is now authenticated.</p>
-                </body>
-                </html>
-                """
-                self.wfile.write(success_html.encode())
-            
-            elif 'error' in params:
-                self.server.auth_error = params['error'][0]
-                self.server.auth_success = False
-                
-                # Send error page
-                self.send_response(400)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                
-                error_html = f"""
-                <html>
-                <head><title>StockX Auth Error</title></head>
-                <body style="font-family: Arial; text-align: center; padding: 50px;">
-                    <h1 style="color: red;">❌ Authentication Error</h1>
-                    <p>Error: {params['error'][0]}</p>
-                    <p>Please try again.</p>
-                </body>
-                </html>
-                """
-                self.wfile.write(error_html.encode())
+                elif 'error' in params:
+                    self.server.auth_error = params['error'][0]
+                    self.server.auth_success = False
+                    
+                    # Send error page
+                    self.send_response(400)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+                    
+                    error_html = f"""
+                    <html>
+                    <head><title>StockX Auth Error</title></head>
+                    <body style="font-family: Arial; text-align: center; padding: 50px;">
+                        <h1 style="color: red;">❌ Authentication Error</h1>
+                        <p>Error: {params['error'][0]}</p>
+                        <p>Please try again.</p>
+                    </body>
+                    </html>
+                    """
+                    self.wfile.write(error_html.encode())
         
         def log_message(self, format, *args):
             # Suppress log messages
@@ -182,8 +182,9 @@ class StockXAutoAuth:
         print(f"🌐 Opening browser for authentication...")
         print(f"📋 If browser doesn't open, visit: {auth_url}")
         
-        # Open browser automatically
-        webbrowser.open(auth_url)
+        # Open browser automatically (not available on Vercel)
+        if not IS_VERCEL:
+            webbrowser.open(auth_url)
         
         print("\n📝 After logging in, you'll be redirected to example.com")
         print("📋 The URL will look like: https://example.com/?code=XXXXXXX&state=YYYYYYY")
