@@ -31,36 +31,36 @@ if not IS_VERCEL:
         _http_server_available = True
         
         class AuthCallbackHandler(BaseHTTPRequestHandler):
-        """Handle OAuth callback automatically"""
-        
-        def do_GET(self):
-            if '?' in self.path:
-                query_string = self.path.split('?', 1)[1]
-                params = parse_qs(query_string)
-                
-                if 'code' in params:
-                    self.server.auth_code = params['code'][0]
-                    self.server.auth_success = True
+            """Handle OAuth callback automatically"""
+            
+            def do_GET(self):
+                if '?' in self.path:
+                    query_string = self.path.split('?', 1)[1]
+                    params = parse_qs(query_string)
                     
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
-                    self.end_headers()
-                    
-                    success_html = """
-                    <html>
-                    <head><title>StockX Auth Success</title></head>
-                    <body style="font-family: Arial; text-align: center; padding: 50px;">
-                        <h1 style="color: green;">✅ Authentication Successful!</h1>
-                        <p>You can close this browser window now.</p>
-                    </body>
-                    </html>
-                    """
-                    self.wfile.write(success_html.encode())
-        
-        def log_message(self, format, *args):
-            pass
-    else:
-        # Create no-op class for Vercel
+                    if 'code' in params:
+                        self.server.auth_code = params['code'][0]
+                        self.server.auth_success = True
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/html')
+                        self.end_headers()
+                        
+                        success_html = """
+                        <html>
+                        <head><title>StockX Auth Success</title></head>
+                        <body style="font-family: Arial; text-align: center; padding: 50px;">
+                            <h1 style="color: green;">✅ Authentication Successful!</h1>
+                            <p>You can close this browser window now.</p>
+                        </body>
+                        </html>
+                        """
+                        self.wfile.write(success_html.encode())
+            
+            def log_message(self, format, *args):
+                pass
+    except ImportError:
+        # Create no-op class if import fails
         class AuthCallbackHandler:
             pass
 else:
