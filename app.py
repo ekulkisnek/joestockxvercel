@@ -31,10 +31,36 @@ import secrets
 # webbrowser not needed in serverless - removed for Vercel compatibility
 from urllib.parse import urlencode, parse_qs
 from datetime import datetime
-import signal
-import psutil
 import time
 from typing import List, Dict, Optional
+
+# Only import signal and psutil if not on Vercel (they can cause issues with serverless)
+if not IS_VERCEL:
+    import signal
+    import psutil
+else:
+    # Create no-op replacements for Vercel
+    class NoOpSignal:
+        SIGTERM = 15
+        SIGINT = 2
+        def signal(self, *args, **kwargs):
+            pass
+    signal = NoOpSignal()
+    
+    # Create minimal psutil replacement for Vercel
+    class NoOpPsutil:
+        class Process:
+            def __init__(self, *args, **kwargs):
+                pass
+            def kill(self, *args, **kwargs):
+                pass
+            def terminate(self, *args, **kwargs):
+                pass
+        class NoSuchProcess(Exception):
+            pass
+        class AccessDenied(Exception):
+            pass
+    psutil = NoOpPsutil()
 
 app = Flask(__name__)
 app.secret_key = 'stockx_tools_secret_key_2025'
@@ -4435,18 +4461,25 @@ def stop_process(script_id):
             # Try to kill child processes too
             try:
                 if script_id in process_pids:
-                    parent = psutil.Process(process_pids[script_id])
-                    children = parent.children(recursive=True)
-                    for child in children:
-                        child.terminate()
+                    if psutil and hasattr(psutil, 'Process'):
+                        parent = psutil.Process(process_pids[script_id])
+                        children = parent.children(recursive=True)
+                        for child in children:
+                            child.terminate()
                     # Wait a bit then kill if still running
                     time.sleep(1)
                     for child in children:
                         if child.is_running():
                             child.kill()
                     parent.terminate()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+            except Exception as e:
+                # Handle both psutil exceptions and generic exceptions
+                if psutil and hasattr(psutil, 'NoSuchProcess') and isinstance(e, (psutil.NoSuchProcess, psutil.AccessDenied)):
+                    pass
+                elif not psutil:
+                    pass  # psutil not available, skip
+                else:
+                    pass  # Other exceptions, skip
             
             # Clean up
             del running_processes[script_id]
