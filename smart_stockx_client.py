@@ -14,28 +14,22 @@ from urllib.parse import urlencode, parse_qs
 # Check if running on Vercel - BaseHTTPRequestHandler causes issues
 IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
-# NEVER import http.server on Vercel - it causes runtime inspection errors
-# Use dynamic import to avoid Vercel's static code inspection
-_http_server_available = False
-HTTPServer = None
-BaseHTTPRequestHandler = None
-AuthCallbackHandler = None
-
+# NEVER import or reference http.server on Vercel - it causes runtime inspection errors
 # Create AuthCallbackHandler dynamically to avoid Vercel's static code inspection
 def _create_auth_handler():
     """Dynamically create AuthCallbackHandler to avoid Vercel inspection issues"""
     if IS_VERCEL:
-        # Return a no-op class for Vercel
+        # Return a no-op class for Vercel - never reference BaseHTTPRequestHandler
         class NoOpHandler:
             pass
-        return NoOpHandler
+        return NoOpHandler, None
     
     try:
         import webbrowser
-        # Use __import__ to avoid static inspection issues
-        http_server = __import__('http.server', fromlist=['HTTPServer', 'BaseHTTPRequestHandler'])
-        BaseHTTPRequestHandler = http_server.BaseHTTPRequestHandler
-        HTTPServer = http_server.HTTPServer
+        # Use __import__ with string to avoid static inspection
+        http_server_mod = __import__('http.server', fromlist=[])
+        BaseHTTPRequestHandler_cls = getattr(http_server_mod, 'BaseHTTPRequestHandler')
+        HTTPServer_cls = getattr(http_server_mod, 'HTTPServer')
         
         # Create class dynamically using type() to avoid static inspection
         def do_GET(self):
@@ -65,26 +59,19 @@ def _create_auth_handler():
         def log_message(self, format, *args):
             pass
         
-        # Create class dynamically
-        AuthCallbackHandler = type('AuthCallbackHandler', (BaseHTTPRequestHandler,), {
+        # Create class dynamically - use getattr to avoid direct reference
+        AuthCallbackHandler = type('AuthCallbackHandler', (BaseHTTPRequestHandler_cls,), {
             'do_GET': do_GET,
             'log_message': log_message
         })
-        return AuthCallbackHandler
-    except ImportError:
+        return AuthCallbackHandler, HTTPServer_cls
+    except (ImportError, AttributeError):
         class NoOpHandler:
             pass
-        return NoOpHandler
+        return NoOpHandler, None
 
-# Create the handler class
-AuthCallbackHandler = _create_auth_handler()
-if not IS_VERCEL:
-    try:
-        from http.server import HTTPServer
-    except ImportError:
-        HTTPServer = None
-else:
-    HTTPServer = None
+# Create the handler class and HTTPServer - do this at module level but conditionally
+AuthCallbackHandler, HTTPServer = _create_auth_handler()
 
 class SmartStockXClient:
     def __init__(self, auto_authenticate=True):
