@@ -31,7 +31,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
 # Import our existing StockX client
-from smart_stockx_client import SmartStockXClient
+# Lazy import to avoid Vercel runtime inspection issues
+def _get_smart_stockx_client():
+    """Lazy import SmartStockXClient to avoid Vercel inspection issues"""
+    from smart_stockx_client import SmartStockXClient
+    return SmartStockXClient
 from sales_volume_analyzer import SalesVolumeAnalyzer
 
 # Configurable GOAT fee rate (platform + processing). Default 13%.

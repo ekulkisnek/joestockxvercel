@@ -11,7 +11,8 @@ import time
 import threading
 from urllib.parse import urlencode, parse_qs
 
-# Check if running on Vercel - BaseHTTPRequestHandler causes issues
+# Check if running on Vercel - http.server causes runtime inspection issues
+# NEVER mention BaseHTTPRequestHandler or HTTPServer in this file when on Vercel
 IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
 # NEVER import or reference http.server on Vercel - it causes runtime inspection errors
@@ -27,9 +28,12 @@ def _create_auth_handler():
     try:
         import webbrowser
         # Use __import__ with string to avoid static inspection
+        # Use getattr with string names to avoid any direct references
         http_server_mod = __import__('http.server', fromlist=[])
-        BaseHTTPRequestHandler_cls = getattr(http_server_mod, 'BaseHTTPRequestHandler')
-        HTTPServer_cls = getattr(http_server_mod, 'HTTPServer')
+        handler_cls_name = 'BaseHTTPRequestHandler'
+        server_cls_name = 'HTTPServer'
+        BaseHTTPRequestHandler_cls = getattr(http_server_mod, handler_cls_name)
+        HTTPServer_cls = getattr(http_server_mod, server_cls_name)
         
         # Create class dynamically using type() to avoid static inspection
         def do_GET(self):
@@ -60,6 +64,7 @@ def _create_auth_handler():
             pass
         
         # Create class dynamically - use getattr to avoid direct reference
+        # Use string for base class name to avoid static inspection
         AuthCallbackHandler = type('AuthCallbackHandler', (BaseHTTPRequestHandler_cls,), {
             'do_GET': do_GET,
             'log_message': log_message
