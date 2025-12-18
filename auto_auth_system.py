@@ -3,20 +3,26 @@
 🔐 Fully Automated StockX Authentication System
 No manual browser interaction required!
 """
+import os
 import json
 import requests
 import secrets
 import time
 import threading
-import webbrowser
 from urllib.parse import urlencode, parse_qs
-from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 
-class AuthCallbackHandler(BaseHTTPRequestHandler):
-    """Handle OAuth callback automatically"""
+# Check if running on Vercel - avoid http.server
+IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
+
+if not IS_VERCEL:
+    import webbrowser
+    from http.server import HTTPServer, BaseHTTPRequestHandler
     
-    def do_GET(self):
+    class AuthCallbackHandler(BaseHTTPRequestHandler):
+        """Handle OAuth callback automatically"""
+        
+        def do_GET(self):
         # Parse the callback URL
         if '?' in self.path:
             query_string = self.path.split('?', 1)[1]
@@ -64,10 +70,15 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
                 </html>
                 """
                 self.wfile.write(error_html.encode())
-    
-    def log_message(self, format, *args):
-        # Suppress log messages
+        
+        def log_message(self, format, *args):
+            # Suppress log messages
+            pass
+else:
+    # Create no-op for Vercel
+    class AuthCallbackHandler:
         pass
+    HTTPServer = None
 
 class StockXAutoAuth:
     def __init__(self):
