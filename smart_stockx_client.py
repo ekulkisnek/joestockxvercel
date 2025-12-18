@@ -3,19 +3,25 @@
 🤖 Smart StockX Client with Auto-Authentication
 No manual token management required!
 """
+import os
 import json
 import requests
 import secrets
 import time
 import threading
-import webbrowser
 from urllib.parse import urlencode, parse_qs
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
-class AuthCallbackHandler(BaseHTTPRequestHandler):
-    """Handle OAuth callback automatically"""
+# Check if running on Vercel - BaseHTTPRequestHandler causes issues
+IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
+
+if not IS_VERCEL:
+    import webbrowser
+    from http.server import HTTPServer, BaseHTTPRequestHandler
     
-    def do_GET(self):
+    class AuthCallbackHandler(BaseHTTPRequestHandler):
+        """Handle OAuth callback automatically"""
+        
+        def do_GET(self):
         if '?' in self.path:
             query_string = self.path.split('?', 1)[1]
             params = parse_qs(query_string)
@@ -39,8 +45,13 @@ class AuthCallbackHandler(BaseHTTPRequestHandler):
                 """
                 self.wfile.write(success_html.encode())
     
-    def log_message(self, format, *args):
+        def log_message(self, format, *args):
+            pass
+else:
+    # Create no-op class for Vercel
+    class AuthCallbackHandler:
         pass
+    HTTPServer = None
 
 class SmartStockXClient:
     def __init__(self, auto_authenticate=True):
