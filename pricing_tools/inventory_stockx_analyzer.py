@@ -126,6 +126,7 @@ class InventoryStockXAnalyzer:
     def __init__(self):
         """Initialize with StockX client"""
         # Initialize client without auto-authentication first
+        SmartStockXClient = _get_smart_stockx_client()
         self.client = SmartStockXClient(auto_authenticate=False)
         self.processed_count = 0
         self.matches_found = 0
