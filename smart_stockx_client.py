@@ -21,52 +21,70 @@ HTTPServer = None
 BaseHTTPRequestHandler = None
 AuthCallbackHandler = None
 
-if not IS_VERCEL:
-    import webbrowser
+# Create AuthCallbackHandler dynamically to avoid Vercel's static code inspection
+def _create_auth_handler():
+    """Dynamically create AuthCallbackHandler to avoid Vercel inspection issues"""
+    if IS_VERCEL:
+        # Return a no-op class for Vercel
+        class NoOpHandler:
+            pass
+        return NoOpHandler
+    
     try:
+        import webbrowser
         # Use __import__ to avoid static inspection issues
         http_server = __import__('http.server', fromlist=['HTTPServer', 'BaseHTTPRequestHandler'])
-        HTTPServer = http_server.HTTPServer
         BaseHTTPRequestHandler = http_server.BaseHTTPRequestHandler
-        _http_server_available = True
+        HTTPServer = http_server.HTTPServer
         
-        class AuthCallbackHandler(BaseHTTPRequestHandler):
-            """Handle OAuth callback automatically"""
-            
-            def do_GET(self):
-                if '?' in self.path:
-                    query_string = self.path.split('?', 1)[1]
-                    params = parse_qs(query_string)
+        # Create class dynamically using type() to avoid static inspection
+        def do_GET(self):
+            if '?' in self.path:
+                query_string = self.path.split('?', 1)[1]
+                params = parse_qs(query_string)
+                
+                if 'code' in params:
+                    self.server.auth_code = params['code'][0]
+                    self.server.auth_success = True
                     
-                    if 'code' in params:
-                        self.server.auth_code = params['code'][0]
-                        self.server.auth_success = True
-                        
-                        self.send_response(200)
-                        self.send_header('Content-type', 'text/html')
-                        self.end_headers()
-                        
-                        success_html = """
-                        <html>
-                        <head><title>StockX Auth Success</title></head>
-                        <body style="font-family: Arial; text-align: center; padding: 50px;">
-                            <h1 style="color: green;">✅ Authentication Successful!</h1>
-                            <p>You can close this browser window now.</p>
-                        </body>
-                        </html>
-                        """
-                        self.wfile.write(success_html.encode())
-            
-            def log_message(self, format, *args):
-                pass
-    except ImportError:
-        # Create no-op class if import fails
-        class AuthCallbackHandler:
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+                    
+                    success_html = """
+                    <html>
+                    <head><title>StockX Auth Success</title></head>
+                    <body style="font-family: Arial; text-align: center; padding: 50px;">
+                        <h1 style="color: green;">✅ Authentication Successful!</h1>
+                        <p>You can close this browser window now.</p>
+                    </body>
+                    </html>
+                    """
+                    self.wfile.write(success_html.encode())
+        
+        def log_message(self, format, *args):
             pass
+        
+        # Create class dynamically
+        AuthCallbackHandler = type('AuthCallbackHandler', (BaseHTTPRequestHandler,), {
+            'do_GET': do_GET,
+            'log_message': log_message
+        })
+        return AuthCallbackHandler
+    except ImportError:
+        class NoOpHandler:
+            pass
+        return NoOpHandler
+
+# Create the handler class
+AuthCallbackHandler = _create_auth_handler()
+if not IS_VERCEL:
+    try:
+        from http.server import HTTPServer
+    except ImportError:
+        HTTPServer = None
 else:
-    # Create no-op class for Vercel when http.server is not available
-    class AuthCallbackHandler:
-        pass
+    HTTPServer = None
 
 class SmartStockXClient:
     def __init__(self, auto_authenticate=True):
