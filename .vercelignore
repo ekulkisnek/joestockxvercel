@@ -1,3 +1,5 @@
-smart_stockx_client.py
+smart_stockx_client_local.py
 auto_auth_system.py
+*.backup
+*.backup2
 

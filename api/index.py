@@ -8,8 +8,9 @@ import io
 import traceback
 from urllib.parse import urlparse
 
-# Set Vercel environment
+# Set Vercel environment BEFORE any other imports
 os.environ['VERCEL'] = '1'
+os.environ['VERCEL_ENV'] = 'production'
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
