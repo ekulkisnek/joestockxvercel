@@ -14,10 +14,22 @@ from urllib.parse import urlencode, parse_qs
 # Check if running on Vercel - BaseHTTPRequestHandler causes issues
 IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
+# NEVER import http.server on Vercel - it causes runtime inspection errors
 if not IS_VERCEL:
     import webbrowser
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    
+    try:
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        _http_server_available = True
+    except ImportError:
+        _http_server_available = False
+        HTTPServer = None
+        BaseHTTPRequestHandler = None
+else:
+    _http_server_available = False
+    HTTPServer = None
+    BaseHTTPRequestHandler = None
+
+if _http_server_available and BaseHTTPRequestHandler is not None:
     class AuthCallbackHandler(BaseHTTPRequestHandler):
         """Handle OAuth callback automatically"""
         
