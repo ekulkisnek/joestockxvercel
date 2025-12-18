@@ -2,4 +2,6 @@ smart_stockx_client_local.py
 auto_auth_system.py
 *.backup
 *.backup2
+smart_stockx_client_vercel.py
+pricing_tools/*.py
 
