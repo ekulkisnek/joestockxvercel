@@ -12,8 +12,10 @@
       "dest": "api/index.py"
     }
   ],
-  "env": {
-    "PYTHON_VERSION": "3.9"
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.9"
+    }
   }
 }
 
