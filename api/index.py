@@ -22,7 +22,29 @@ def handler(request):
     """Vercel Python runtime handler"""
     try:
         # Import app only when handler is called
-        from app import app as flask_app
+        # Use importlib to avoid static inspection issues
+        import importlib
+        import importlib.util
+        
+        # Try to import app dynamically
+        try:
+            from app import app as flask_app
+        except Exception as import_error:
+            # If import fails due to Vercel inspection, try alternative approach
+            error_str = str(import_error)
+            if 'BaseHTTPRequestHandler' in error_str or 'issubclass' in error_str:
+                # Try to import without problematic modules
+                import sys
+                # Remove problematic modules from sys.modules if they exist
+                modules_to_remove = [k for k in sys.modules.keys() if 'http.server' in k or 'smart_stockx' in k or 'auto_auth' in k]
+                for mod in modules_to_remove:
+                    if mod in sys.modules:
+                        del sys.modules[mod]
+                
+                # Try importing again
+                from app import app as flask_app
+            else:
+                raise
         
         # Get request data
         if hasattr(request, 'method'):
