@@ -15,6 +15,13 @@ os.environ['VERCEL_ENV'] = 'production'
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Aggressively prevent http.server from being inspected by Vercel
+# Remove any http.server references from sys.modules if they exist
+if 'http.server' in sys.modules:
+    del sys.modules['http.server']
+if 'http' in sys.modules and hasattr(sys.modules['http'], 'server'):
+    delattr(sys.modules['http'], 'server')
+
 # Don't import app at module level - import only in handler
 # This avoids Vercel's runtime inspection issues
 
@@ -22,29 +29,18 @@ def handler(request):
     """Vercel Python runtime handler"""
     try:
         # Import app only when handler is called
-        # Use importlib to avoid static inspection issues
-        import importlib
-        import importlib.util
+        # Aggressively clean sys.modules before import to prevent Vercel inspection
+        modules_to_remove = []
+        for mod_name in list(sys.modules.keys()):
+            if 'http.server' in mod_name or 'BaseHTTPRequestHandler' in mod_name:
+                modules_to_remove.append(mod_name)
         
-        # Try to import app dynamically
-        try:
-            from app import app as flask_app
-        except Exception as import_error:
-            # If import fails due to Vercel inspection, try alternative approach
-            error_str = str(import_error)
-            if 'BaseHTTPRequestHandler' in error_str or 'issubclass' in error_str:
-                # Try to import without problematic modules
-                import sys
-                # Remove problematic modules from sys.modules if they exist
-                modules_to_remove = [k for k in sys.modules.keys() if 'http.server' in k or 'smart_stockx' in k or 'auto_auth' in k]
-                for mod in modules_to_remove:
-                    if mod in sys.modules:
-                        del sys.modules[mod]
-                
-                # Try importing again
-                from app import app as flask_app
-            else:
-                raise
+        for mod in modules_to_remove:
+            if mod in sys.modules:
+                del sys.modules[mod]
+        
+        # Import app
+        from app import app as flask_app
         
         # Get request data
         if hasattr(request, 'method'):
