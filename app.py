@@ -28,7 +28,7 @@ import threading
 import json
 import requests
 import secrets
-import webbrowser
+# webbrowser not needed in serverless - removed for Vercel compatibility
 from urllib.parse import urlencode, parse_qs
 from datetime import datetime
 import signal
@@ -98,10 +98,13 @@ process_pids = {}       # process_id -> PID for cleanup
 token_refresh_thread = None
 token_refresh_active = False
 
-# Create upload directory if it doesn't exist
-import os
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Create upload directory if it doesn't exist (skip on Vercel/serverless)
+if not IS_VERCEL:
+    try:
+        if not os.path.exists(UPLOAD_FOLDER):
+            os.makedirs(UPLOAD_FOLDER)
+    except Exception as e:
+        print(f"⚠️ Could not create upload directory: {e}")
 
 # StockX OAuth configuration - supports environment variables for Replit deployment
 STOCKX_API_KEY = os.getenv('STOCKX_API_KEY', 'GH4A9FkG7E3uaWswtc87U7kw8A4quRsU6ciFtrUp')
@@ -121,12 +124,17 @@ def is_replit_environment():
 def _resolve_token_file_path():
     """Determine where to store tokens. Honors STOCKX_TOKEN_FILE if set.
     On Replit, default to ~/.stockx/tokens_full_scope.json to avoid repo conflicts.
+    On Vercel/serverless, use /tmp directory (only writable location).
     Locally, default to ./tokens_full_scope.json.
     """
     # Explicit override takes precedence
     env_path = os.getenv('STOCKX_TOKEN_FILE')
     if env_path:
         return env_path
+    
+    # On Vercel/serverless, use /tmp (only writable directory)
+    if IS_VERCEL:
+        return '/tmp/tokens_full_scope.json'
     
     # Prefer hidden home directory on hosted environments
     if is_replit_environment():
@@ -158,6 +166,14 @@ def ensure_token_available():
     Returns True if a token becomes available, else False.
     """
     try:
+        # On Vercel/serverless, skip file operations if /tmp is not accessible
+        if IS_VERCEL:
+            # Just check if token file exists, don't try to create directories
+            if os.path.exists(TOKEN_FILE):
+                return True
+            # On Vercel, rely on environment variables for tokens
+            return False
+        
         # Ensure directory for token file exists
         try:
             token_dir = os.path.dirname(TOKEN_FILE)
@@ -565,6 +581,33 @@ def robust_authentication_check():
     global auth_state
     
     try:
+        # On Vercel/serverless, skip file-based checks if file doesn't exist
+        # and we can't create it (rely on environment variables instead)
+        if IS_VERCEL:
+            # Check if token file exists and is readable
+            if not os.path.exists(TOKEN_FILE):
+                # On Vercel, check for environment variable tokens instead
+                env_token = os.getenv('STOCKX_ACCESS_TOKEN')
+                if env_token:
+                    # Use environment token for validation
+                    headers = {
+                        'Authorization': f'Bearer {env_token}',
+                        'x-api-key': STOCKX_API_KEY
+                    }
+                    try:
+                        response = requests.get(
+                            'https://api.stockx.com/v2/catalog/search?query=nike&pageSize=1',
+                            headers=headers,
+                            timeout=10
+                        )
+                        if response.status_code == 200:
+                            auth_state['authenticated'] = True
+                            auth_state['auth_error'] = None
+                            return True, None, None
+                    except:
+                        pass
+                return False, 'No token file found - first time setup required', 'authenticate'
+        
         # Step 1: Check if token file exists
         if not os.path.exists(TOKEN_FILE):
             return False, 'No token file found - first time setup required', 'authenticate'
@@ -573,7 +616,10 @@ def robust_authentication_check():
         try:
             with open(TOKEN_FILE, 'r') as f:
                 tokens = json.load(f)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            if IS_VERCEL:
+                # On Vercel, file read errors are non-fatal
+                return False, 'Token file not accessible - use environment variables', 'authenticate'
             return False, 'Token file corrupted - re-authentication required', 'authenticate'
         
         if 'access_token' not in tokens:

@@ -5,6 +5,7 @@ import sys
 import os
 import io
 import traceback
+from urllib.parse import urlparse, parse_qs
 
 # Set Vercel environment before any imports
 os.environ['VERCEL'] = '1'
@@ -16,76 +17,85 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 app = None
 import_error = None
 
+# Try to import app at module level to catch import errors early
+try:
+    from app import app as flask_app
+    app = flask_app
+    print("✅ Flask app imported successfully")
+except Exception as e:
+    import_error = e
+    error_trace = traceback.format_exc()
+    print(f"❌ Failed to import Flask app at module level: {str(e)}\n{error_trace}")
+
 # Vercel Python runtime expects a handler function
 def handler(request):
     global app, import_error
     
-    # Lazy import app only when handler is called
+    # If import failed at module level, return error immediately
+    if import_error is not None:
+        error_trace = traceback.format_exc()
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'text/plain; charset=utf-8'},
+            'body': f'Failed to import Flask app: {str(import_error)}\n\nTraceback:\n{error_trace}'
+        }
+    
+    # Lazy import app only when handler is called (fallback)
     if app is None:
         try:
             from app import app as flask_app
             app = flask_app
+            print("✅ Flask app imported successfully in handler")
         except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"❌ Failed to import Flask app in handler: {str(e)}\n{error_trace}")
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'text/plain; charset=utf-8'},
-                'body': f'Failed to import Flask app: {str(e)}\n\nTraceback:\n{traceback.format_exc()}'
+                'body': f'Failed to import Flask app: {str(e)}\n\nTraceback:\n{error_trace}'
             }
     
     try:
-        # Get request attributes - handle different formats
-        if hasattr(request, 'method'):
-            method = request.method
-        elif isinstance(request, dict):
+        # Vercel Python runtime passes request as an object with specific attributes
+        # Handle both object and dict formats
+        if isinstance(request, dict):
+            # Dict format from Vercel
             method = request.get('method', 'GET')
-        else:
-            method = 'GET'
-        
-        if hasattr(request, 'path'):
-            path = request.path
-        elif isinstance(request, dict):
-            path = request.get('path', '/')
-        elif hasattr(request, 'url'):
-            from urllib.parse import urlparse
-            parsed = urlparse(request.url)
-            path = parsed.path
-        else:
-            path = '/'
-        
-        # Extract query string
-        if hasattr(request, 'query_string'):
-            query_string = request.query_string
-        elif isinstance(request, dict):
-            query_string = request.get('query_string', '')
-        elif '?' in path:
-            path, query_string = path.split('?', 1)
-        else:
-            query_string = ''
-        
-        # Get headers
-        if hasattr(request, 'headers'):
-            headers = request.headers
-            if not isinstance(headers, dict):
-                headers = dict(headers) if headers else {}
-        elif isinstance(request, dict):
+            url = request.get('url', '/')
             headers = request.get('headers', {})
-        else:
-            headers = {}
-        
-        # Get body
-        if hasattr(request, 'body'):
-            body = request.body
-        elif isinstance(request, dict):
             body = request.get('body', b'')
+            
+            # Parse URL
+            parsed = urlparse(url)
+            path = parsed.path or '/'
+            query_string = parsed.query or ''
         else:
-            body = b''
+            # Object format - try to get attributes
+            method = getattr(request, 'method', 'GET')
+            url = getattr(request, 'url', '/')
+            headers = getattr(request, 'headers', {})
+            body = getattr(request, 'body', b'')
+            
+            # Convert headers to dict if needed
+            if not isinstance(headers, dict):
+                try:
+                    headers = dict(headers) if headers else {}
+                except:
+                    headers = {}
+            
+            # Parse URL
+            parsed = urlparse(url)
+            path = parsed.path or '/'
+            query_string = parsed.query or ''
         
         # Convert body to bytes if needed
         if isinstance(body, str):
             body = body.encode('utf-8')
+        elif body is None:
+            body = b''
         
-        # Get host
-        host = headers.get('host', headers.get('Host', 'localhost:443'))
+        # Get host from headers
+        host = headers.get('host') or headers.get('Host') or headers.get('x-forwarded-host') or 'localhost'
         if ':' in str(host):
             server_name, server_port = str(host).split(':', 1)
         else:
@@ -98,7 +108,7 @@ def handler(request):
             'SCRIPT_NAME': '',
             'PATH_INFO': path,
             'QUERY_STRING': query_string,
-            'CONTENT_TYPE': headers.get('content-type', headers.get('Content-Type', '')),
+            'CONTENT_TYPE': headers.get('content-type') or headers.get('Content-Type') or '',
             'CONTENT_LENGTH': str(len(body)),
             'SERVER_NAME': server_name,
             'SERVER_PORT': server_port,
@@ -112,11 +122,18 @@ def handler(request):
             'wsgi.run_once': False,
         }
         
-        # Add HTTP headers
+        # Add HTTP headers (convert to WSGI format)
         for key, value in headers.items():
-            if key.lower() not in ('content-type', 'content-length', 'host'):
+            key_lower = key.lower()
+            if key_lower not in ('content-type', 'content-length', 'host'):
                 http_key = 'HTTP_' + key.upper().replace('-', '_')
                 environ[http_key] = str(value)
+        
+        # Add common headers
+        if 'x-forwarded-for' in headers:
+            environ['HTTP_X_FORWARDED_FOR'] = headers['x-forwarded-for']
+        if 'x-forwarded-proto' in headers:
+            environ['HTTP_X_FORWARDED_PROTO'] = headers['x-forwarded-proto']
         
         # Response storage
         response_headers = []
@@ -127,7 +144,16 @@ def handler(request):
             response_headers[:] = headers_list
         
         # Call Flask app
-        response = app(environ, start_response)
+        try:
+            response = app(environ, start_response)
+        except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"Flask app error: {str(e)}\n{error_trace}")
+            return {
+                'statusCode': 500,
+                'headers': {'Content-Type': 'text/plain; charset=utf-8'},
+                'body': f'Flask app error: {str(e)}\n\nTraceback:\n{error_trace}'
+            }
         
         # Collect response body
         body_parts = []
@@ -140,10 +166,12 @@ def handler(request):
                 else:
                     body_parts.append(str(part).encode('utf-8'))
         except Exception as e:
+            error_trace = traceback.format_exc()
+            print(f"Error collecting response: {str(e)}\n{error_trace}")
             return {
                 'statusCode': 500,
                 'headers': {'Content-Type': 'text/plain; charset=utf-8'},
-                'body': f'Error collecting response: {str(e)}\n{traceback.format_exc()}'
+                'body': f'Error collecting response: {str(e)}\n{error_trace}'
             }
         
         # Decode body
@@ -175,7 +203,9 @@ def handler(request):
         
     except Exception as e:
         # Return detailed error
-        error_msg = f'Handler error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}'
+        error_trace = traceback.format_exc()
+        error_msg = f'Handler error: {str(e)}\n\nTraceback:\n{error_trace}'
+        print(error_msg)
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'text/plain; charset=utf-8'},
