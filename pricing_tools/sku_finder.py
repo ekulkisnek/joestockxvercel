@@ -15,13 +15,19 @@ from typing import Dict, List, Optional, Tuple
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from smart_stockx_client import SmartStockXClient
+# Lazy import to avoid Vercel runtime inspection issues
+def _get_smart_stockx_client():
+    """Lazy import SmartStockXClient to avoid Vercel inspection issues"""
+    from smart_stockx_client import SmartStockXClient
+    return SmartStockXClient
+
 import requests
 
 class SKUFinder:
     def __init__(self):
         """Initialize SKU finder with StockX and Alias clients"""
         try:
+            SmartStockXClient = _get_smart_stockx_client()
             self.client = SmartStockXClient()
             print("✅ StockX client initialized successfully")
         except Exception as e:
