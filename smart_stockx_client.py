@@ -15,22 +15,22 @@ from urllib.parse import urlencode, parse_qs
 IS_VERCEL = os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None
 
 # NEVER import http.server on Vercel - it causes runtime inspection errors
+# Use dynamic import to avoid Vercel's static code inspection
+_http_server_available = False
+HTTPServer = None
+BaseHTTPRequestHandler = None
+AuthCallbackHandler = None
+
 if not IS_VERCEL:
     import webbrowser
     try:
-        from http.server import HTTPServer, BaseHTTPRequestHandler
+        # Use __import__ to avoid static inspection issues
+        http_server = __import__('http.server', fromlist=['HTTPServer', 'BaseHTTPRequestHandler'])
+        HTTPServer = http_server.HTTPServer
+        BaseHTTPRequestHandler = http_server.BaseHTTPRequestHandler
         _http_server_available = True
-    except ImportError:
-        _http_server_available = False
-        HTTPServer = None
-        BaseHTTPRequestHandler = None
-else:
-    _http_server_available = False
-    HTTPServer = None
-    BaseHTTPRequestHandler = None
-
-if _http_server_available and BaseHTTPRequestHandler is not None:
-    class AuthCallbackHandler(BaseHTTPRequestHandler):
+        
+        class AuthCallbackHandler(BaseHTTPRequestHandler):
         """Handle OAuth callback automatically"""
         
         def do_GET(self):
@@ -59,11 +59,14 @@ if _http_server_available and BaseHTTPRequestHandler is not None:
         
         def log_message(self, format, *args):
             pass
+    else:
+        # Create no-op class for Vercel
+        class AuthCallbackHandler:
+            pass
 else:
-    # Create no-op class for Vercel
+    # Create no-op class for Vercel when http.server is not available
     class AuthCallbackHandler:
         pass
-    HTTPServer = None
 
 class SmartStockXClient:
     def __init__(self, auto_authenticate=True):
